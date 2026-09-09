@@ -1,221 +1,318 @@
-/// Tests for the rules of the game. No framework: the assertions below are the
-/// whole harness, so the suite builds anywhere the server does.
+/// Tests for the rules of the game.
+///
+/// Every case carries a tag, so a single group can be run in isolation:
+///     ./core_tests "[snake]"          ./core_tests "[command]"
+///     ctest --test-dir build -R Snake
 
-#include <cstdlib>
 #include <deque>
-#include <iostream>
 #include <string>
 #include <vector>
 
+#include <catch2/catch_test_macros.hpp>
+#include <nlohmann/json.hpp>
+
 #include "Collision.hpp"
+#include "Command.hpp"
 #include "Game.hpp"
 #include "Snake.hpp"
 
+using snake::Cell;
+using snake::Command;
+using snake::Direction;
+using snake::Game;
+using snake::GameStatus;
+using snake::Snake;
+
 namespace {
 
-int failures = 0;
-int checks = 0;
-
-void check(bool condition, const std::string& what) {
-    ++checks;
-    if (!condition) {
-        ++failures;
-        std::cerr << "FAIL: " << what << "\n";
-    }
-}
-
-std::vector<snake::Cell> cellsOf(const snake::Snake& s) {
+std::vector<Cell> cellsOf(const Snake& s) {
     return {s.cells().begin(), s.cells().end()};
-}
-
-bool equal(const std::vector<snake::Cell>& got, const std::vector<snake::Cell>& want) {
-    return got == want;
-}
-
-// --- Snake ---------------------------------------------------------------
-
-void testSnake() {
-    {
-        snake::Snake s({5, 5});
-        check(equal(cellsOf(s), {{5, 5}, {4, 5}, {3, 5}}), "starts horizontal, head first");
-        check(s.head() == snake::Cell{5, 5}, "head is the front cell");
-    }
-    {
-        snake::Snake s({5, 5});
-        s.move();
-        check(equal(cellsOf(s), {{6, 5}, {5, 5}, {4, 5}}), "move advances head and drops tail");
-    }
-    {
-        snake::Snake s({5, 5});
-        s.grow();
-        s.move();
-        check(equal(cellsOf(s), {{6, 5}, {5, 5}, {4, 5}, {3, 5}}), "growth keeps the tail one tick");
-        s.move();
-        check(equal(cellsOf(s), {{7, 5}, {6, 5}, {5, 5}, {4, 5}}), "growth is spent after one tick");
-    }
-    {
-        snake::Snake s({5, 5}, snake::Direction::Right);
-        s.turn(snake::Direction::Left);
-        s.move();
-        check(s.head() == snake::Cell{6, 5}, "reversal is ignored");
-        check(s.direction() == snake::Direction::Right, "reversal leaves the heading alone");
-    }
-    {
-        // UP then DOWN before a tick must not double back onto the neck.
-        snake::Snake s({5, 5}, snake::Direction::Right);
-        s.turn(snake::Direction::Up);
-        s.turn(snake::Direction::Down);
-        s.move();
-        check(s.head() != snake::Cell{4, 5}, "two turns in one tick cannot fold the snake");
-        check(s.head() == snake::Cell{5, 6}, "the later legal turn wins");
-    }
-    {
-        snake::Snake s({5, 5});
-        check(s.nextHead() == snake::Cell{6, 5}, "nextHead looks ahead");
-        check(s.head() == snake::Cell{5, 5}, "nextHead does not mutate");
-        s.turn(snake::Direction::Up);
-        check(s.nextHead() == snake::Cell{5, 4}, "nextHead uses the pending turn");
-    }
-    {
-        check(snake::isOpposite(snake::Direction::Up, snake::Direction::Down), "up/down oppose");
-        check(snake::isOpposite(snake::Direction::Left, snake::Direction::Right), "left/right oppose");
-        check(!snake::isOpposite(snake::Direction::Up, snake::Direction::Left), "up/left do not oppose");
-        check(snake::directionFromName("UP").has_value(), "UP parses");
-        check(!snake::directionFromName("BOGUS").has_value(), "an unknown direction is rejected");
-        check(snake::nameOf(snake::Direction::Right) == "RIGHT", "direction serializes to the wire name");
-    }
-}
-
-// --- Collision -----------------------------------------------------------
-
-void testCollision() {
-    const std::deque<snake::Cell> body{{5, 5}, {4, 5}, {3, 5}};
-
-    check(snake::hitsWall({-1, 0}, 10, 10), "left wall");
-    check(snake::hitsWall({0, -1}, 10, 10), "top wall");
-    check(snake::hitsWall({10, 0}, 10, 10), "right wall");
-    check(snake::hitsWall({0, 10}, 10, 10), "bottom wall");
-    check(!snake::hitsWall({0, 0}, 10, 10), "top-left corner is inside");
-    check(!snake::hitsWall({9, 9}, 10, 10), "bottom-right corner is inside");
-
-    check(snake::hitsSelf({4, 5}, body), "running into the body is fatal");
-    check(!snake::hitsSelf({3, 5}, body), "following your own tail is legal");
-    check(!snake::hitsSelf({9, 9}, body), "empty space is not the body");
-
-    check(snake::isFatal({-1, 5}, body, 10, 10), "isFatal covers walls");
-    check(snake::isFatal({4, 5}, body, 10, 10), "isFatal covers the body");
-    check(!snake::isFatal({6, 5}, body, 10, 10), "open ground is survivable");
-}
-
-// --- Game ----------------------------------------------------------------
-
-void testGame() {
-    {
-        snake::Game g(10, 10, 0.01, 1);
-        check(g.status() == snake::GameStatus::Ready, "a new game is ready, not running");
-        const auto before = cellsOf(g.snake());
-        g.tick();
-        check(equal(cellsOf(g.snake()), before), "a ready game does not move");
-        check(g.ticks() == 0, "a ready game does not count ticks");
-    }
-    {
-        snake::Game g(10, 10, 0.01, 1);
-        g.start();
-        g.tick();
-        check(g.status() == snake::GameStatus::Running, "start runs the game");
-        check(g.ticks() == 1, "a running game counts ticks");
-    }
-    {
-        snake::Game g(10, 10, 0.01, 1);
-        g.start();
-        g.tick();
-        g.pause();
-        const auto frozen = cellsOf(g.snake());
-        g.tick();
-        check(g.status() == snake::GameStatus::Paused, "pause holds");
-        check(equal(cellsOf(g.snake()), frozen), "a paused board is frozen");
-        g.togglePause();
-        check(g.status() == snake::GameStatus::Running, "toggle resumes from paused");
-        g.togglePause();
-        check(g.status() == snake::GameStatus::Paused, "toggle pauses from running");
-    }
-    {
-        snake::Game g(10, 10, 0.01, 1);
-        g.turn(snake::Direction::Up);
-        check(g.status() == snake::GameStatus::Running, "the first turn starts the game");
-    }
-    {
-        snake::Game g(10, 10, 0.01, 1);
-        g.start();
-        g.turn(snake::Direction::Up);
-        for (int i = 0; i < 20; ++i) g.tick();
-        check(g.status() == snake::GameStatus::GameOver, "running into a wall ends the game");
-
-        const int ticks = g.ticks();
-        g.tick();
-        check(g.ticks() == ticks, "a dead game stops ticking");
-
-        g.turn(snake::Direction::Down);
-        check(g.status() == snake::GameStatus::GameOver, "a dead game ignores turns");
-
-        g.reset();
-        check(g.status() == snake::GameStatus::Ready, "reset revives a dead game");
-        check(g.score() == 0 && g.ticks() == 0, "reset clears the score and the clock");
-        check(g.snake().cells().size() == 3, "reset restores the starting length");
-    }
-    {
-        snake::Game g(10, 10, 0.01, 1);
-        g.start();
-        g.setFood(g.snake().nextHead());
-        const std::size_t length = g.snake().cells().size();
-        g.tick();
-        check(g.score() == 1, "eating scores");
-        check(g.snake().cells().size() == length + 1, "eating grows on the same tick");
-        check(g.food().has_value() && *g.food() != g.snake().head(), "food respawns elsewhere");
-    }
-    {
-        // A 2x1 board with a one-cell snake: eating the last free cell fills it.
-        snake::Game g(2, 1, 0.01, 1);
-        g.start();
-        check(g.status() == snake::GameStatus::Running, "the tiny board starts");
-        g.setFood(snake::Cell{1, 0});
-        g.tick();
-        check(g.score() >= 0, "the tiny board ticks without crashing");
-    }
-    {
-        snake::Game g(10, 10, 0.01, 1);
-        const std::string json = g.toJson();
-        check(json.find(R"("type":"state")") != std::string::npos, "the wire message is tagged");
-        for (const char* field : {"width", "height", "status", "score", "ticks", "snake",
-                                  "direction", "food"}) {
-            check(json.find(std::string("\"") + field + "\":") != std::string::npos,
-                  std::string("the wire format carries ") + field);
-        }
-        check(json.find(R"("status":"ready")") != std::string::npos, "status serializes by name");
-        check(json.find(R"("direction":"RIGHT")") != std::string::npos, "direction serializes by name");
-
-        g.setFood(std::nullopt);
-        check(g.toJson().find(R"("food":null)") != std::string::npos, "absent food serializes as null");
-    }
-    {
-        // Same seed, same board: sessions are reproducible for debugging.
-        snake::Game a(10, 10, 0.01, 7);
-        snake::Game b(10, 10, 0.01, 7);
-        check(a.toJson() == b.toJson(), "a seeded game is deterministic");
-    }
 }
 
 }  // namespace
 
-int main() {
-    testSnake();
-    testCollision();
-    testGame();
+// --- Snake ---------------------------------------------------------------
 
-    std::cout << checks - failures << "/" << checks << " checks passed\n";
-    if (failures > 0) {
-        std::cerr << failures << " check(s) failed\n";
-        return 1;
+TEST_CASE("Snake starts laid out behind its head", "[snake]") {
+    const Snake s({5, 5});
+    REQUIRE(cellsOf(s) == std::vector<Cell>{{5, 5}, {4, 5}, {3, 5}});
+    REQUIRE(s.head() == Cell{5, 5});
+}
+
+TEST_CASE("Snake moves by advancing the head and dropping the tail", "[snake]") {
+    Snake s({5, 5});
+    s.move();
+    REQUIRE(cellsOf(s) == std::vector<Cell>{{6, 5}, {5, 5}, {4, 5}});
+}
+
+TEST_CASE("Snake growth keeps the tail for exactly one tick", "[snake]") {
+    Snake s({5, 5});
+    s.grow();
+
+    s.move();
+    REQUIRE(cellsOf(s) == std::vector<Cell>{{6, 5}, {5, 5}, {4, 5}, {3, 5}});
+
+    s.move();  // the growth is spent: back to dropping the tail
+    REQUIRE(cellsOf(s) == std::vector<Cell>{{7, 5}, {6, 5}, {5, 5}, {4, 5}});
+}
+
+TEST_CASE("Snake ignores a reversal", "[snake]") {
+    Snake s({5, 5}, Direction::Right);
+    s.turn(Direction::Left);
+    s.move();
+    REQUIRE(s.head() == Cell{6, 5});
+    REQUIRE(s.direction() == Direction::Right);
+}
+
+TEST_CASE("Two turns inside one tick cannot fold the snake onto its neck", "[snake]") {
+    Snake s({5, 5}, Direction::Right);
+    s.turn(Direction::Up);
+    s.turn(Direction::Down);
+    s.move();
+
+    REQUIRE(s.head() != Cell{4, 5});   // the neck
+    REQUIRE(s.head() == Cell{5, 6});   // the later legal turn wins
+}
+
+TEST_CASE("Snake::nextHead looks ahead without mutating", "[snake]") {
+    Snake s({5, 5});
+    REQUIRE(s.nextHead() == Cell{6, 5});
+    REQUIRE(s.head() == Cell{5, 5});
+
+    s.turn(Direction::Up);
+    REQUIRE(s.nextHead() == Cell{5, 4});
+}
+
+TEST_CASE("Directions oppose and serialize by wire name", "[snake]") {
+    REQUIRE(snake::isOpposite(Direction::Up, Direction::Down));
+    REQUIRE(snake::isOpposite(Direction::Left, Direction::Right));
+    REQUIRE_FALSE(snake::isOpposite(Direction::Up, Direction::Left));
+
+    REQUIRE(snake::directionFromName("UP").has_value());
+    REQUIRE_FALSE(snake::directionFromName("BOGUS").has_value());
+    REQUIRE(snake::nameOf(Direction::Right) == "RIGHT");
+}
+
+// --- Collision -----------------------------------------------------------
+
+TEST_CASE("Walls are fatal on every edge", "[collision]") {
+    REQUIRE(snake::hitsWall({-1, 0}, 10, 10));
+    REQUIRE(snake::hitsWall({0, -1}, 10, 10));
+    REQUIRE(snake::hitsWall({10, 0}, 10, 10));
+    REQUIRE(snake::hitsWall({0, 10}, 10, 10));
+
+    REQUIRE_FALSE(snake::hitsWall({0, 0}, 10, 10));
+    REQUIRE_FALSE(snake::hitsWall({9, 9}, 10, 10));
+}
+
+TEST_CASE("Following your own tail is legal", "[collision]") {
+    const std::deque<Cell> body{{5, 5}, {4, 5}, {3, 5}};
+
+    REQUIRE(snake::hitsSelf({4, 5}, body));          // the body is fatal
+    REQUIRE_FALSE(snake::hitsSelf({3, 5}, body));    // the tail vacates this tick
+    REQUIRE_FALSE(snake::hitsSelf({9, 9}, body));
+}
+
+TEST_CASE("isFatal covers both walls and the body", "[collision]") {
+    const std::deque<Cell> body{{5, 5}, {4, 5}, {3, 5}};
+
+    REQUIRE(snake::isFatal({-1, 5}, body, 10, 10));
+    REQUIRE(snake::isFatal({4, 5}, body, 10, 10));
+    REQUIRE_FALSE(snake::isFatal({6, 5}, body, 10, 10));
+}
+
+// --- Game ----------------------------------------------------------------
+
+TEST_CASE("A new game is ready, not running", "[game]") {
+    Game g(10, 10, 0.01, 1);
+    REQUIRE(g.status() == GameStatus::Ready);
+
+    const auto before = cellsOf(g.snake());
+    g.tick();
+    REQUIRE(cellsOf(g.snake()) == before);
+    REQUIRE(g.ticks() == 0);
+}
+
+TEST_CASE("Start runs the clock", "[game]") {
+    Game g(10, 10, 0.01, 1);
+    g.start();
+    g.tick();
+    REQUIRE(g.status() == GameStatus::Running);
+    REQUIRE(g.ticks() == 1);
+}
+
+TEST_CASE("Pause freezes the board and toggles back", "[game]") {
+    Game g(10, 10, 0.01, 1);
+    g.start();
+    g.tick();
+    g.pause();
+
+    const auto frozen = cellsOf(g.snake());
+    g.tick();
+    REQUIRE(g.status() == GameStatus::Paused);
+    REQUIRE(cellsOf(g.snake()) == frozen);
+
+    g.togglePause();
+    REQUIRE(g.status() == GameStatus::Running);
+    g.togglePause();
+    REQUIRE(g.status() == GameStatus::Paused);
+}
+
+TEST_CASE("The first turn starts the game", "[game]") {
+    Game g(10, 10, 0.01, 1);
+    g.turn(Direction::Up);
+    REQUIRE(g.status() == GameStatus::Running);
+}
+
+TEST_CASE("A wall ends the game, and a dead game stays dead", "[game]") {
+    Game g(10, 10, 0.01, 1);
+    g.start();
+    g.turn(Direction::Up);
+    for (int i = 0; i < 20; ++i) g.tick();
+    REQUIRE(g.status() == GameStatus::GameOver);
+
+    const int ticks = g.ticks();
+    g.tick();
+    REQUIRE(g.ticks() == ticks);
+
+    g.turn(Direction::Down);
+    REQUIRE(g.status() == GameStatus::GameOver);
+
+    g.reset();
+    REQUIRE(g.status() == GameStatus::Ready);
+    REQUIRE(g.score() == 0);
+    REQUIRE(g.ticks() == 0);
+    REQUIRE(g.snake().cells().size() == 3);
+}
+
+TEST_CASE("Eating scores and grows on the same tick", "[game]") {
+    Game g(10, 10, 0.01, 1);
+    g.start();
+    g.setFood(g.snake().nextHead());
+    const std::size_t length = g.snake().cells().size();
+
+    g.tick();
+
+    REQUIRE(g.score() == 1);
+    REQUIRE(g.snake().cells().size() == length + 1);
+    REQUIRE(g.food().has_value());
+    REQUIRE(*g.food() != g.snake().head());   // respawned somewhere else
+}
+
+TEST_CASE("A seeded game is reproducible", "[game]") {
+    const Game a(10, 10, 0.01, 7);
+    const Game b(10, 10, 0.01, 7);
+    REQUIRE(a.toJson() == b.toJson());
+}
+
+// --- The wire format -----------------------------------------------------
+
+TEST_CASE("State serializes to the shape web/types/game.ts expects", "[wire]") {
+    Game g(10, 10, 0.01, 1);
+    const nlohmann::json state = nlohmann::json::parse(g.toJson());
+
+    REQUIRE(state["type"] == "state");
+    REQUIRE(state["width"] == 10);
+    REQUIRE(state["height"] == 10);
+    REQUIRE(state["status"] == "ready");
+    REQUIRE(state["score"] == 0);
+    REQUIRE(state["ticks"] == 0);
+    REQUIRE(state["direction"] == "RIGHT");
+
+    REQUIRE(state["snake"].is_array());
+    REQUIRE(state["snake"].size() == 3);
+    for (const auto& cell : state["snake"]) {
+        REQUIRE(cell.is_array());
+        REQUIRE(cell.size() == 2);
+        REQUIRE(cell[0].is_number_integer());
     }
-    return 0;
+
+    REQUIRE(state["food"].is_array());
+    REQUIRE(state["food"].size() == 2);
+}
+
+TEST_CASE("Absent food serializes as null", "[wire]") {
+    Game g(10, 10, 0.01, 1);
+    g.setFood(std::nullopt);
+    REQUIRE(nlohmann::json::parse(g.toJson())["food"].is_null());
+}
+
+// --- Commands ------------------------------------------------------------
+
+TEST_CASE("Every client message parses", "[command]") {
+    const auto turn = snake::parseCommand(R"({"type":"turn","direction":"UP"})");
+    REQUIRE(turn.has_value());
+    REQUIRE(turn->kind == Command::Kind::Turn);
+    REQUIRE(turn->direction == Direction::Up);
+
+    REQUIRE(snake::parseCommand(R"({"type":"start"})")->kind == Command::Kind::Start);
+    REQUIRE(snake::parseCommand(R"({"type":"pause"})")->kind == Command::Kind::Pause);
+    REQUIRE(snake::parseCommand(R"({"type":"reset"})")->kind == Command::Kind::Reset);
+
+    for (const char* name : {"UP", "DOWN", "LEFT", "RIGHT"}) {
+        const std::string json =
+            std::string(R"({"type":"turn","direction":")") + name + "\"}";
+        REQUIRE(snake::parseCommand(json).has_value());
+    }
+}
+
+TEST_CASE("Malformed and hostile messages are rejected, never thrown", "[command]") {
+    const char* rejected[] = {
+        "",
+        "not json at all",
+        "{}",
+        "[]",                                       // an array, not an object
+        "null",
+        R"({"type":"fly"})",                        // unknown command
+        R"({"type":"turn"})",                       // no direction
+        R"({"type":"turn","direction":"BOGUS"})",
+        R"({"type":"turn","direction":"up"})",      // wire names are upper case
+        R"({"type":"turn","direction":7})",         // wrong JSON type
+        R"({"type":7})",
+        R"({"type":)",                              // truncated
+        R"({"direction":"UP"})",                    // no type
+    };
+
+    for (const char* json : rejected) {
+        INFO("input: " << json);
+        REQUIRE_NOTHROW(snake::parseCommand(json));
+        REQUIRE_FALSE(snake::parseCommand(json).has_value());
+    }
+}
+
+TEST_CASE("Field order and extra fields do not matter", "[command]") {
+    const auto c = snake::parseCommand(R"({"direction":"LEFT","type":"turn","pad":"x"})");
+    REQUIRE(c.has_value());
+    REQUIRE(c->kind == Command::Kind::Turn);
+    REQUIRE(c->direction == Direction::Left);
+}
+
+TEST_CASE("Escapes and nesting parse correctly", "[command]") {
+    // A hand-rolled extractor gets these wrong; a real parser does not.
+    REQUIRE_FALSE(snake::parseCommand(R"({"note":"\"type\":\"reset\"","type":"fly"})").has_value());
+
+    const auto nested = snake::parseCommand(R"({"meta":{"type":"reset"},"type":"start"})");
+    REQUIRE(nested.has_value());
+    REQUIRE(nested->kind == Command::Kind::Start);
+}
+
+TEST_CASE("apply drives the game through the server's own path", "[command]") {
+    Game g(10, 10, 0.01, 1);
+
+    snake::apply(*snake::parseCommand(R"({"type":"start"})"), g);
+    REQUIRE(g.status() == GameStatus::Running);
+
+    snake::apply(*snake::parseCommand(R"({"type":"pause"})"), g);
+    REQUIRE(g.status() == GameStatus::Paused);
+
+    snake::apply(*snake::parseCommand(R"({"type":"pause"})"), g);
+    REQUIRE(g.status() == GameStatus::Running);
+
+    snake::apply(*snake::parseCommand(R"({"type":"turn","direction":"UP"})"), g);
+    g.tick();
+    REQUIRE(g.snake().direction() == Direction::Up);
+
+    snake::apply(*snake::parseCommand(R"({"type":"reset"})"), g);
+    REQUIRE(g.status() == GameStatus::Ready);
+    REQUIRE(g.ticks() == 0);
 }

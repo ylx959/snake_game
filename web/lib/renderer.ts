@@ -21,6 +21,10 @@ export const DEFAULT_THEME: RendererTheme = {
   food: "#f472b6",
 };
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private cellSize = 0;
@@ -42,7 +46,9 @@ export class Renderer {
     const dpr = window.devicePixelRatio || 1;
     // `cssSize` bounds the longest edge; each axis then gets its own extent so
     // a non-square board is not stretched into a square.
-    this.cellSize = Math.floor(cssSize / Math.max(state.width, state.height));
+    // At least 1px: a board longer than `cssSize` would otherwise floor to a
+    // zero-sized canvas and draw nothing at all.
+    this.cellSize = Math.max(1, Math.floor(cssSize / Math.max(state.width, state.height)));
     const width = this.cellSize * state.width;
     const height = this.cellSize * state.height;
 
@@ -86,16 +92,22 @@ export class Renderer {
     ctx.fillStyle = "rgba(15, 17, 23, 0.72)";
     ctx.fillRect(0, 0, w, h);
 
+    // Type is sized from the rendered board, not from a cell. Cell size tracks
+    // the board's dimensions - a 160x90 board has 3px cells - so text scaled
+    // from it silently becomes unreadable when the board grows.
+    const titleSize = clamp(Math.min(w, h) * 0.12, 18, 64);
+    const hintSize = clamp(titleSize * 0.42, 11, 22);
+
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
     ctx.fillStyle = this.theme.snakeHead;
-    ctx.font = `600 ${Math.round(cellSize * 1.5)}px ui-sans-serif, system-ui, sans-serif`;
-    ctx.fillText(title, w / 2, h / 2 - cellSize * 0.6);
+    ctx.font = `600 ${Math.round(titleSize)}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.fillText(title, w / 2, h / 2 - titleSize * 0.4);
 
     ctx.fillStyle = "rgba(230, 232, 239, 0.75)";
-    ctx.font = `${Math.round(cellSize * 0.7)}px ui-sans-serif, system-ui, sans-serif`;
-    ctx.fillText(hint, w / 2, h / 2 + cellSize * 1.1);
+    ctx.font = `${Math.round(hintSize)}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.fillText(hint, w / 2, h / 2 + titleSize * 0.75);
   }
 
   private drawGrid(state: GameState): void {

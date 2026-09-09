@@ -1,8 +1,9 @@
 /// Server entrypoint.
 ///
-/// Transport only. Every rule of the game lives in Game/Snake/Collision; this
-/// file's job is to hand each WebSocket connection its own `Game`, feed it
-/// commands, and push the resulting state out at the tick rate.
+/// Wiring only. The rules live in Game/Snake/Collision, the client protocol in
+/// Command, the transport in WebSocketServer. This file's job is to hand each
+/// connection its own `Game`, pump commands into it, and push state out at the
+/// tick rate.
 
 #include <atomic>
 #include <chrono>
@@ -14,57 +15,15 @@
 #include <mutex>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <thread>
 
+#include "Command.hpp"
 #include "Game.hpp"
 #include "WebSocketServer.hpp"
 
 namespace {
 
 constexpr std::uint16_t kDefaultPort = 8000;
-
-/// Pull a string field out of a flat JSON object.
-///
-/// The client only ever sends small machine-generated messages such as
-/// `{"type":"turn","direction":"UP"}`, so this is deliberately not a general
-/// JSON parser - it finds the key and returns the quoted value after it.
-std::optional<std::string> jsonString(std::string_view json, std::string_view key) {
-    const std::string needle = "\"" + std::string(key) + "\"";
-    const std::size_t at = json.find(needle);
-    if (at == std::string_view::npos) return std::nullopt;
-
-    std::size_t cursor = json.find(':', at + needle.size());
-    if (cursor == std::string_view::npos) return std::nullopt;
-
-    const std::size_t open = json.find('"', cursor);
-    if (open == std::string_view::npos) return std::nullopt;
-    const std::size_t close = json.find('"', open + 1);
-    if (close == std::string_view::npos) return std::nullopt;
-
-    return std::string(json.substr(open + 1, close - open - 1));
-}
-
-/// Translate one client message into a call on the game.
-void applyCommand(snake::Game& game, std::string_view message) {
-    const std::optional<std::string> type = jsonString(message, "type");
-    if (!type) return;
-
-    if (*type == "turn") {
-        const std::optional<std::string> name = jsonString(message, "direction");
-        if (!name) return;
-        // An unknown direction is ignored rather than killing the socket.
-        if (const auto direction = snake::directionFromName(*name)) {
-            game.turn(*direction);
-        }
-    } else if (*type == "start") {
-        game.start();
-    } else if (*type == "pause") {
-        game.togglePause();
-    } else if (*type == "reset") {
-        game.reset();
-    }
-}
 
 /// One player's session: a game, a clock pushing state, and a command pump.
 void runSession(snake::WebSocketConnection& connection) {
@@ -101,8 +60,12 @@ void runSession(snake::WebSocketConnection& connection) {
     });
 
     while (const std::optional<std::string> message = connection.receiveText()) {
+        // Parse outside the lock: it touches no game state, and holding the
+        // mutex while doing string work would stall the ticker for no reason.
+        const std::optional<snake::Command> command = snake::parseCommand(*message);
+        if (!command) continue;  // unrecognised message: ignore, keep the socket
         std::lock_guard<std::mutex> lock(gameMutex);
-        applyCommand(game, *message);
+        snake::apply(*command, game);
     }
 
     running.store(false);

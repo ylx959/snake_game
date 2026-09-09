@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "Collision.hpp"
 
 namespace snake {
@@ -111,33 +113,29 @@ bool Game::respawnFood() {
 }
 
 std::string Game::toJson() const {
-    std::string out = R"({"type":"state")";
-    out += ",\"width\":" + std::to_string(width_);
-    out += ",\"height\":" + std::to_string(height_);
-    out += ",\"status\":\"" + std::string(nameOf(status_)) + "\"";
-    out += ",\"score\":" + std::to_string(score_);
-    out += ",\"ticks\":" + std::to_string(ticks_);
+    nlohmann::json out{
+        {"type", "state"},
+        {"width", width_},
+        {"height", height_},
+        {"status", nameOf(status_)},
+        {"score", score_},
+        {"ticks", ticks_},
+        {"direction", nameOf(snake_.direction())},
+    };
 
-    out += ",\"snake\":[";
-    bool first = true;
+    nlohmann::json body = nlohmann::json::array();
     for (const Cell& cell : snake_.cells()) {
-        if (!first) out += ",";
-        out += "[" + std::to_string(cell.x) + "," + std::to_string(cell.y) + "]";
-        first = false;
+        body.push_back({cell.x, cell.y});
     }
-    out += "]";
+    out["snake"] = std::move(body);
 
-    out += ",\"direction\":\"" + std::string(nameOf(snake_.direction())) + "\"";
-
-    out += ",\"food\":";
     if (food_) {
-        out += "[" + std::to_string(food_->x) + "," + std::to_string(food_->y) + "]";
+        out["food"] = {food_->x, food_->y};
     } else {
-        out += "null";
+        out["food"] = nullptr;
     }
 
-    out += "}";
-    return out;
+    return out.dump();
 }
 
 }  // namespace snake

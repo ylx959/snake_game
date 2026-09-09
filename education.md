@@ -110,16 +110,68 @@ npm run build && npm start   # http://127.0.0.1:3000
 
 打開 <http://127.0.0.1:3000/game>。
 
-### 這裡有兩個坑，先講清楚免得你以為是自己弄壞的
+開發時用 `npm run dev`（有 Fast Refresh，改了程式碼會自動更新畫面）：
 
-**坑 1：`npm run dev` 在這台機器上不會動。**
-畫面會出現，但永遠停在 "connecting"，而且**完全不報錯**。
-原因不是程式碼——連一個 5 行的空白測試頁都一樣不會 hydrate（見第 9 章）。
-懷疑是 Node v25（非 LTS 版本）。**開發時請用 `npm run build && npm start`。**
+```bash
+cd web && npm run dev
+```
 
-**坑 2：`npm run lint` 壞的。**
-Next.js 16 拿掉了 `next lint` 指令，但 `package.json` 裡還留著。
-會噴 "no such directory: .../web/lint"。不是你的問題，不用追。
+### 附帶一課：這裡曾經有兩個坑，怎麼修的
+
+這兩個問題已經修好了，但**診斷過程本身很值得學**，所以留在這裡。
+
+#### 坑 1：`npm run dev` 畫面出得來，但完全沒有互動
+
+症狀非常難查：HTML 正常顯示、**console 一個錯誤都沒有**，
+但按鈕沒反應、`useEffect` 不執行、狀態永遠停在 "connecting"。
+而 `npm run build && npm start`（正式模式）卻完全正常。
+
+診斷的推進過程：
+
+1. 先確認**不是這個專案的程式碼**——寫一個 5 行的空白測試頁，一樣不會 hydrate
+2. 排除 Turbopack（換 `--webpack` 也一樣）、dev overlay（`devIndicators: false` 無效）、
+   React Strict Mode（關掉無效）
+3. 一度懷疑 Node 版本，**實際下載可攜式 Node 22 LTS 測試 → 一樣壞**。假設推翻
+4. 回頭檢查瀏覽器攔到的 WebSocket：Next 自己的 HMR 連線 `error` + `close:1006`，
+   但連我們自己的遊戲伺服器卻正常
+5. 用 `curl` 對 HMR 端點發升級請求 → **回 101 成功**。伺服器沒問題，是瀏覽器連不上
+6. 找出兩者唯一的差別：**瀏覽器一定會送 `Origin` 標頭，curl 沒送**
+
+驗證：
+
+```bash
+# 不送 Origin → 101 Switching Protocols
+# 送 Origin   → 400 Bad Request      ← 就是它
+```
+
+**根因**：Next.js dev server 預設會擋掉所有帶著「非預期 Origin」的
+dev-only 請求（這是防止惡意網站連你本機開發伺服器的安全機制）。
+但它連 `http://127.0.0.1:3015` 這種**同源**的請求也一起擋了。
+HMR 連不上 → dev client 啟動不完整 → hydration 永遠不會完成 → 畫面靜止不動。
+
+**修法**（`web/next.config.ts`）：
+
+```ts
+allowedDevOrigins: ["127.0.0.1", "localhost"],
+```
+
+> **教訓**：「沒有錯誤訊息」不代表沒有錯誤。
+> 這個 bug 從頭到尾沒有拋出任何例外——因為從程式的角度看，
+> 它只是在「等一個永遠不會來的連線」。遇到這種安靜的失敗，
+> 要找的是**兩個環境的差異**（dev vs prod、curl vs 瀏覽器），
+> 而不是盯著程式碼看。
+
+#### 坑 2：`npm run lint` 直接報錯
+
+Next.js 16 **移除了 `next lint` 指令**，但 `package.json` 裡還留著舊的
+`"lint": "next lint"`，於是 `lint` 被當成目錄名稱，噴出
+"no such directory: .../web/lint"。
+
+**修法**：改用 ESLint CLI（這也是 Next 官方的遷移建議）。
+裝了 `eslint` + `eslint-config-next`，加上 `web/eslint.config.mjs`（flat config），
+並把 script 改成 `"lint": "eslint ."`。
+
+現在 `npm run lint` 會檢查 12 個檔案，涵蓋 TypeScript、Next.js 和無障礙（a11y）規則。
 
 ### 為什麼要用 `127.0.0.1` 而不是 `localhost`
 
@@ -196,8 +248,11 @@ Next.js 16 拿掉了 `next lint` 指令，但 `package.json` 裡還留著。
 **改一邊就必須同時改另一邊。** 沒有 schema、沒有 codegen、沒有任何測試會抓到不一致。
 如果你在 C++ 加了一個欄位卻忘了改 TS，TypeScript 不會報錯——它只是不知道那個欄位存在。
 
-> 這是刻意的取捨：為了讓 server 零相依（不裝 JSON 函式庫），
-> 代價就是這份契約要靠人工維護。第 12 章會談怎麼改善。
+> server 現在用 **nlohmann/json** 產生和解析這些訊息，所以序列化本身不會出錯。
+> 但「兩邊各寫一份欄位定義」這件事函式庫救不了——JSON 函式庫只保證你產出的是
+> 合法 JSON，不保證 TypeScript 那邊知道你多加了一個欄位。
+> `[wire]` 那組測試會釘住 C++ 這側的形狀，但沒有東西檢查兩邊是否一致。
+> 第 12 章會談怎麼真正解決。
 
 ### 動手做
 
@@ -679,8 +734,18 @@ Next.js 會先在伺服器把 HTML 產生好送給瀏覽器（所以你「看得
 這個接手的過程叫 **hydration（水合）**。
 
 **hydration 失敗時，畫面看起來是好的，但完全沒有互動**——
-`useEffect` 不會跑、按鈕沒反應。這正是 `npm run dev` 在這台機器上的症狀：
-畫面有，但 socket 從來沒被建立過。
+`useEffect` 不會跑、按鈕沒反應、state 永遠停在初始值。
+
+這正是第 1 章那個 `allowedDevOrigins` bug 的症狀：HTML 有、CSS 有、
+連 React 本身都載入了，但 hydration 卡在等 HMR 連線，
+所以 `useSnakeGame` 的 effect 從來沒執行過，socket 也就從來沒被建立。
+
+判斷有沒有 hydrate 的最快方法，是在 console 檢查 DOM 節點上有沒有 React 掛的內部屬性：
+
+```js
+const btn = document.querySelector('button');
+Object.keys(btn).some(k => k.startsWith('__react'))   // true = 已 hydrate
+```
 
 ---
 
@@ -732,26 +797,30 @@ this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // 之後就能用 CSS 座標畫圖
 ```bash
 cd game-server
 cmake --build build && ctest --test-dir build --output-on-failure
-./build/core_tests        # 直接跑，會印 "64/64 checks passed"
+./build/core_tests        # 直接跑，會印 "All tests passed (121 assertions in 24 test cases)"
 ```
 
-### 沒有用測試框架
+### 從手寫斷言到 Catch2
 
-`tests/core_tests.cpp` 沒有 Google Test、沒有 Catch2。整個框架就是這幾行：
+一開始 `tests/core_tests.cpp` 沒有用任何框架，整個「框架」就是一個
+`check(condition, message)` 函式加兩個計數器。這在測試不多時完全夠用，
+而且零相依。
 
-```cpp
-void check(bool condition, const std::string& what) {
-    ++checks;
-    if (!condition) { ++failures; std::cerr << "FAIL: " << what << "\n"; }
-}
+為什麼？當初寫的時候機器上什麼都沒裝，就順手寫了最小的版本。
+代價是**沒有測試篩選功能**——不能只跑某一條。
+
+**這個問題後來解決了：現在用 Catch2。** 每個測試都有標籤，可以單獨跑：
+
+```bash
+./build/core_tests "[command]"                      # 只跑指令解析那一組
+./build/core_tests "Absent food serializes as null" # 只跑某一個
+ctest --test-dir build -R tail                      # 用名稱篩選
 ```
 
-為什麼？因為 game-server 的賣點就是**零第三方相依**。
-為了測試而引入一個函式庫，會破壞「只要 CMake + C++20 編譯器就能建」這個性質。
+相依由 CMake 的 `FetchContent` 在 configure 時抓下來（用 release 壓縮檔、
+釘住 SHA256），不會裝到你的系統裡。第一次 `cmake -S . -B build` 需要網路。
 
-代價是沒有測試篩選功能——不能只跑某一條。
-粒度只到 `main()` 裡的三個函式：`testSnake()` / `testCollision()` / `testGame()`。
-要單獨跑一組，就把另外兩個註解掉。
+現有的標籤：`[snake]` `[collision]` `[game]` `[wire]` `[command]`。
 
 ### 測試在守什麼
 
@@ -759,11 +828,13 @@ void check(bool condition, const std::string& what) {
 
 | 測試 | 守住的東西 |
 |---|---|
-| "two turns in one tick cannot fold the snake" | 第 4 章的轉向緩衝 |
-| "following your own tail is legal" | 第 5 章排除尾巴 |
-| "eating grows on the same tick" | 第 3 章的執行順序 |
-| "a seeded game is deterministic" | 隨機可重現 |
-| "the wire format carries ..." | 第 2 章的傳輸契約 |
+| "Two turns inside one tick cannot fold the snake onto its neck" | 第 4 章的轉向緩衝 |
+| "Following your own tail is legal" | 第 5 章排除尾巴 |
+| "Eating scores and grows on the same tick" | 第 3 章的執行順序 |
+| "A seeded game is reproducible" | 隨機可重現 |
+| "State serializes to the shape web/types/game.ts expects" | 第 2 章的傳輸契約 |
+| "Malformed and hostile messages are rejected, never thrown" | 畸形輸入不能弄掛連線 |
+| "Escapes and nesting parse correctly" | 手寫解析器會錯、真 parser 不會 |
 
 寫測試時值得問自己：**「如果有人不懂這段程式碼，他會怎麼把它改壞？」**
 然後為那個情境寫測試。
