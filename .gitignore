@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Environment: real values stay local, the example file is committed.
+.env
+.env.local
+.env.*.local
