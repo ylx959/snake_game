@@ -1,0 +1,9 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "snake: the body and the turn buffer",
+    "collision: wall and self collision",
+    "game: the tick, food, score and status",
+    "wire: the serialized shape the browser receives",
+    "command: parsing and applying client messages",
+]

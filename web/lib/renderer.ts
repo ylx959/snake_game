@@ -3,36 +3,44 @@
  * `GameState` and draws exactly that, so it can never disagree with the server.
  *
  * It draws the board and nothing else. Every piece of text - score, status,
- * prompts, buttons - is DOM, so the pixel font is a font rather than something
- * this file has to reimplement with `fillText`.
+ * prompts, buttons, the hint - is DOM, so the pixel font is a font rather than
+ * something this file has to reimplement with `fillText`.
  */
 
+import { cellEdges } from "@/lib/board";
 import { INK, paletteAt } from "@/lib/palette";
 import type { Cell, Direction, GameState } from "@/types/game";
 
-/** Where the head's two eyes sit, as fractions of a cell, per heading. */
-const EYES: Record<Direction, readonly [number, number][]> = {
-  RIGHT: [
-    [0.5, 0.2],
-    [0.5, 0.6],
-  ],
-  LEFT: [
-    [0.3, 0.2],
-    [0.3, 0.6],
-  ],
-  UP: [
-    [0.2, 0.3],
-    [0.6, 0.3],
-  ],
-  DOWN: [
-    [0.2, 0.5],
-    [0.6, 0.5],
-  ],
+/**
+ * The head's eyes: two fully rounded bars that run along the way the snake is
+ * heading, pushed toward the leading edge of the cell.
+ *
+ * The numbers are the reference drawing measured on a 54x54 cell, kept as
+ * fractions of it so they scale with any cell size: each bar is 25 long and 13
+ * thick, its long axis centred at 36.5, and the pair sitting 11.5 either side
+ * of the middle.
+ */
+const EYE_LENGTH = 25 / 54;
+const EYE_THICKNESS = 13 / 54;
+/** Distance from the trailing edge to the bars' long-axis centre. */
+const EYE_AHEAD = 36.5 / 54;
+/** How far each bar sits from the cell's centre line. */
+const EYE_SPREAD = 11.5 / 54;
+
+/**
+ * Which way the bars lie, and how far along that axis they sit. UP and LEFT
+ * lead toward the low end of their axis, so their pair mirrors.
+ */
+const EYES: Record<Direction, { horizontal: boolean; ahead: number }> = {
+  RIGHT: { horizontal: true, ahead: EYE_AHEAD },
+  LEFT: { horizontal: true, ahead: 1 - EYE_AHEAD },
+  DOWN: { horizontal: false, ahead: EYE_AHEAD },
+  UP: { horizontal: false, ahead: 1 - EYE_AHEAD },
 };
 
-const EYE_RATIO = 0.2;
 /** Below this the eyes are a smudge, so they are dropped instead. */
 const MIN_CELL_FOR_EYES = 10;
+
 /** How far the apple is inset, so it reads as an object and not a wall tile. */
 const FOOD_INSET = 0.14;
 
@@ -82,17 +90,39 @@ export class Renderer {
     this.drawEyes(state);
   }
 
-  /** Two black pixels on the head, so you can tell which end is which. */
+
+  /** Two black bars on the head, so you can tell which end is which. */
   private drawEyes(state: GameState): void {
     const { ctx } = this;
     const [left, top, width, height] = this.bounds(state.snake[0]);
     if (Math.min(width, height) < MIN_CELL_FOR_EYES) return;
 
-    const size = Math.max(2, Math.round(Math.min(width, height) * EYE_RATIO));
+    const { horizontal, ahead } = EYES[state.direction];
+    const along = horizontal ? width : height;
+    const across = horizontal ? height : width;
+
+    // Whole pixels, so the straight sides stay hard; only the rounded caps are
+    // ever antialiased.
+    const barAlong = Math.max(2, Math.round(EYE_LENGTH * along));
+    const barAcross = Math.max(2, Math.round(EYE_THICKNESS * across));
+    const alongPos = Math.round(ahead * along - barAlong / 2);
+
+    // Place the near bar, then mirror it. Rounding each bar independently lets
+    // one round up and the other down, which lands the pair a pixel off centre.
+    const near = Math.round((0.5 - EYE_SPREAD) * across - barAcross / 2);
+    const far = across - barAcross - near;
 
     ctx.fillStyle = INK;
-    for (const [ox, oy] of EYES[state.direction]) {
-      ctx.fillRect(left + Math.round(width * ox), top + Math.round(height * oy), size, size);
+    for (const acrossPos of [near, far]) {
+      const x = left + (horizontal ? alongPos : acrossPos);
+      const y = top + (horizontal ? acrossPos : alongPos);
+      const w = horizontal ? barAlong : barAcross;
+      const h = horizontal ? barAcross : barAlong;
+
+      ctx.beginPath();
+      // A radius of half the short side turns the rectangle into a capsule.
+      ctx.roundRect(x, y, w, h, Math.min(w, h) / 2);
+      ctx.fill();
     }
   }
 
@@ -105,15 +135,16 @@ export class Renderer {
     this.ctx.fillRect(left + padX, top + padY, width - padX * 2, height - padY * 2);
   }
 
-  /** A cell's pixel rectangle, snapped to whole pixels on every edge. */
+  /**
+   * A cell's pixel rectangle, snapped to whole pixels on every edge.
+   *
+   * The rule lives in `lib/board.ts` because the DOM needs the same answer:
+   * `Hint` masks itself with these rectangles, and a mask that rounds even one
+   * edge differently from the paint would sit visibly off the snake.
+   */
   private bounds([x, y]: Cell): [number, number, number, number] {
-    const left = Math.round(x * this.cellWidth);
-    const top = Math.round(y * this.cellHeight);
-    return [
-      left,
-      top,
-      Math.round((x + 1) * this.cellWidth) - left,
-      Math.round((y + 1) * this.cellHeight) - top,
-    ];
+    const [left, width] = cellEdges(x, this.cellWidth);
+    const [top, height] = cellEdges(y, this.cellHeight);
+    return [left, top, width, height];
   }
 }

@@ -10,8 +10,10 @@
  */
 
 import { GameCanvas } from "@/components/game/GameCanvas";
+import { Hint } from "@/components/game/Hint";
 import { Prompt } from "@/components/game/Prompt";
 import { ScoreBoard } from "@/components/game/ScoreBoard";
+import { StartPauseButton } from "@/components/game/StartPauseButton";
 import { useSnakeGame } from "@/hooks/useSnakeGame";
 import { paletteAt } from "@/lib/palette";
 
@@ -30,22 +32,18 @@ export default function Home() {
       <div className="ui">
         <ScoreBoard state={state} connection={connection} />
         <Prompt status={state?.status ?? null} connection={connection} />
+      
 
         <div className="ui__gap" />
 
         <footer className="controls">
-          <button type="button" onClick={() => send({ type: "start" })}>
-            Start
-          </button>
-          <button type="button" onClick={() => send({ type: "pause" })}>
-            Pause
-          </button>
+          <StartPauseButton status={state?.status ?? null} send={send} />
           <button type="button" onClick={() => send({ type: "reset" })}>
             Reset
           </button>
         </footer>
 
-        <p className="hint">Arrows / WASD to steer · Space to pause · R to reset</p>
+        <Hint state={state} />
       </div>
     </main>
   );

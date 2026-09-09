@@ -17,3 +17,9 @@
 .env
 .env.local
 .env.*.local
+
+# Python
+backend/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/

@@ -13,12 +13,13 @@ const pixel = Press_Start_2P({
 });
 
 export const metadata: Metadata = {
-  title: "SNAKE",
+  title: "YLX | Snake Game",
   description: "Server-authoritative snake: Python owns the state, the browser only draws it.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
+
     <html lang="en" className={pixel.variable}>
       <body>{children}</body>
     </html>

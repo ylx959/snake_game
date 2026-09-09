@@ -5,6 +5,7 @@
  * server said and never derives game state of its own.
  */
 
+import { LitText } from "@/components/game/LitText";
 import type { ConnectionStatus, GameState } from "@/types/game";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -28,12 +29,12 @@ export function ScoreBoard({
 
   return (
     <header className="hud">
-      <span className="hud__score">
+      <LitText state={state} className="hud__score">
         Score {String(state?.score ?? 0).padStart(3, "0")}
-      </span>
-      <span className="hud__status" data-connection={connection}>
+      </LitText>
+      <LitText state={state} className="hud__status" data-connection={connection}>
         {label}
-      </span>
+      </LitText>
     </header>
   );
 }
