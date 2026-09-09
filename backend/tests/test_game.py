@@ -127,9 +127,41 @@ def test_reset_puts_everything_back():
     assert game.status is GameStatus.READY
     assert game.score == 0
     assert game.ticks == 0
-    assert game.palette == 0
     assert len(game.snake) == 3
     assert game.food is not None
+
+
+def test_reset_keeps_the_colours():
+    # The one thing a reset does not undo. It is the same player carrying on,
+    # so the screen stays on the pair it was wearing.
+    game = new_game()
+    game.start()
+    for _ in range(2):
+        game.food = game.snake.next_head()
+        game.tick()
+    assert game.palette == 2
+
+    game.reset()
+
+    assert game.palette == 2
+    assert game.score == 0  # everything else did go back
+
+
+def test_only_a_fresh_game_starts_from_the_first_pair():
+    assert new_game().palette == 0
+
+
+def test_resizing_also_keeps_the_colours():
+    # `resize()` starts the run over through `reset()`, so it inherits the rule.
+    game = new_game()
+    game.start()
+    game.food = game.snake.next_head()
+    game.tick()
+
+    game.resize(40, 20)
+
+    assert game.palette == 1
+    assert game.status is GameStatus.READY
 
 
 def test_resize_reshapes_the_board_and_starts_over():

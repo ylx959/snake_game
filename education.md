@@ -35,7 +35,7 @@
 | 想把分數改成 999 | DevTools 打一行就好 | 做不到。改了下一個 tick 就被覆蓋回去 |
 | 想讓蛇跑快一點 | 改 `setInterval` 的參數 | 做不到。你送再多訊息，時鐘還是伺服器的 |
 | 關掉網路 | 沒有網路可以關 | 遊戲停住，一秒後自動重連，然後拿到**全新的一局** |
-| 要幾個檔案 | 1 | 28（後端 15、前端 13） |
+| 要幾個檔案 | 1 | 31 個主要程式與測試檔（後端 15、前端 16） |
 | 要開幾個終端機 | 0 | 2 |
 | 按一次方向鍵要多久 | 0 毫秒 | 一趟來回網路 |
 
@@ -97,7 +97,7 @@
 | 7 | WebSocket 到底是什麼（以及為什麼你現在看不到它） | ★★★ |
 | 8 | 並行：兩條執行緒一把鎖 → 一個事件迴圈零把鎖 | ★★★ |
 | 9 | 前端分層：誰可以知道什麼 | ★★ |
-| 10 | Canvas 渲染：dpr、滿版、格子邊界 | ★★ |
+| 10 | Canvas 與 DOM 渲染：dpr、滿版、遮罩 | ★★ |
 | 11 | 測試是怎麼寫的 | ★★ |
 | 12 | 模組設計：介面、接縫、可測試性 | ★★★ |
 | 13 | 這個專案「刻意沒做」的事 | ★★★ |
@@ -413,7 +413,7 @@ def opposite(self) -> "Direction":
 「現在是第幾組」算不算遊戲狀態？
 
 算。因為它是從「吃了幾顆」推出來的，而那是伺服器的事。
-所以 `Game` 存了一個 `palette` 整數，每吃一顆 `+1` 再對 5 取模
+所以 `Game` 存了一個 `palette` 整數，每吃一顆 `+1` 再對 6 取模
 （`backend/game/game.py:27` 的 `PALETTE_COUNT`），然後把**這個整數**送下去。
 
 而那六組色碼住在 `web/lib/palette.ts`：
@@ -464,7 +464,8 @@ def resize(self, width: int, height: int) -> None:
 2. **一樣大就直接 return**。因為改變大小會 `reset()`，不擋掉的話每次
    重新連線都會無故重開一局
 3. **改變大小 = 重開一局**。這是刻意的取捨：不 reset 的話，視窗縮小後蛇可能
-   有一半在棋盤外，得決定「截斷？傳送？直接判死？」——每個答案都比「重開」更讓人困惑
+   有一半在棋盤外，得決定「截斷？傳送？直接判死？」——每個答案都比「重開」更讓人困惑。
+   （注意它是呼叫 `reset()`，所以連配色不會歸零這件事也一起繼承了。）
 
 前端那側也配合做了兩件事（`web/hooks/useSnakeGame.ts:51`）：格數**沒真的變**就不送，
 以及視窗拖曳時 debounce 250ms 只送最後停下來的尺寸。
@@ -538,6 +539,11 @@ def move(self) -> None:
 **⑥ 分數和顏色綁在同一行。** 兩者都只在 `eating` 為真時發生，
 所以「畫面翻色」和「分數 +1」永遠是同一個 tick——玩家會把兩件事看成同一件事的兩個表現，
 這正是想要的效果。
+
+> 但**只有分數會被 `reset()` 歸零，顏色不會**。`palette` 是唯一在 `__init__`
+> 設定、而 `reset()` 刻意不碰的欄位：按 Reset 是同一個玩家再玩一次，畫面沒有
+> 理由跳回第一組顏色。只有「新的連線」才會拿到新的 `Game`、從第 0 組重新開始。
+> `test_reset_keeps_the_colours` 釘住這條規則。
 
 **⑦ 棋盤填滿 = 通關。** `_respawn_food()` 回傳 `False` 代表沒有空格可以放食物了，
 也就是蛇塞滿了整個棋盤。目前這被當成 `GAME_OVER` 處理——
@@ -998,8 +1004,11 @@ web/
 │
 └── components/game/        ← 純呈現，只收 props
     ├── GameCanvas.tsx
+    ├── Hint.tsx
+    ├── LitText.tsx
     ├── ScoreBoard.tsx
-    └── Prompt.tsx
+    ├── Prompt.tsx
+    └── StartPauseButton.tsx
 ```
 
 ### 為什麼要這樣切
@@ -1012,6 +1021,18 @@ web/
 
 `hooks/useSnakeGame.ts` 是唯一「翻譯層」：它管 socket 的生死、
 把伺服器狀態塞進 React state、綁鍵盤、送 `resize`。
+
+`components/game/` 最近多拆了三個元件，但沒有改變這條邊界：
+
+- `StartPauseButton` 從伺服器回傳的 `status` 決定顯示 Start 或 Pause，
+  點下去只送意圖；它自己不保存「現在是否暫停」
+- `Hint` 只負責底部操作提示
+- `LitText` 是共用的視覺效果：分數、狀態和底部提示原本是黑字，
+  蛇從字後面經過時，被蛇蓋到的部分會變成白色
+
+這裡很容易誤會：`LitText` 的確會讀 `state.snake`，但它沒有因此接管遊戲規則。
+它只拿伺服器已經決定好的座標計算 `clip-path`，不判定碰撞、不移動蛇，
+也不把任何結果送回伺服器。**從權威狀態推導外觀，不等於擁有狀態。**
 
 ### `useEffect` 的清理函式
 
@@ -1096,7 +1117,7 @@ Object.keys(btn).some(k => k.startsWith('__react'))   // true = 已 hydrate
 
 ---
 
-## 第 10 章：Canvas 渲染：dpr、滿版、格子邊界
+## 第 10 章：Canvas 與 DOM 渲染：dpr、滿版、遮罩
 
 `web/lib/renderer.ts` 的 `Renderer` 有一個重要性質：
 **它對遊戲是無狀態的**。它不記得上一幀是什麼，只是把傳進來的 `GameState` 畫出來。
@@ -1107,12 +1128,12 @@ Object.keys(btn).some(k => k.startsWith('__react'))   // true = 已 hydrate
 （`globals.css` 裡 `.ui` 是 `position: fixed` 加 `pointer-events: none`）。
 這樣像素字型就是一個真的字型，而不是要用 `fillText` 重新實作一次的東西。
 
-### devicePixelRatio：為什麼字會糊
+### devicePixelRatio：為什麼 canvas 會糊
 
 Retina 螢幕上，1 個 CSS 像素對應 2 個（甚至 3 個）實體像素。
 如果 canvas 只按 CSS 尺寸來設，畫出來的東西會被放大而模糊。
 
-`renderer.ts:60` 附近的處理方式：
+`renderer.ts:67` 的處理方式：
 
 ```ts
 const dpr = window.devicePixelRatio || 1;
@@ -1144,18 +1165,12 @@ this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);     // 之後就能用 CSS 座標�
 每個方塊的邊都落在半個像素上，瀏覽器會幫你「柔化」——
 像素風的硬邊就這樣被磨掉了。
 
-解法在 `renderer.ts:109`：
+這個計算現在抽到 `board.ts:51` 的 `cellEdges()`，因為不只 canvas 需要它：
 
 ```ts
-private bounds([x, y]: Cell): [number, number, number, number] {
-  const left = Math.round(x * this.cellWidth);
-  const top = Math.round(y * this.cellHeight);
-  return [
-    left,
-    top,
-    Math.round((x + 1) * this.cellWidth) - left,
-    Math.round((y + 1) * this.cellHeight) - top,
-  ];
+export function cellEdges(cell: number, cellSize: number): [start: number, size: number] {
+  const start = Math.round(cell * cellSize);
+  return [start, Math.round((cell + 1) * cellSize) - start];
 }
 ```
 
@@ -1166,6 +1181,36 @@ private bounds([x, y]: Cell): [number, number, number, number] {
 > 如果改成 `width = Math.round(this.cellWidth)`，多數格子看起來一樣，
 > 但每隔幾格就會出現一條 1px 的背景色細縫。這種 bug 在截圖上很難發現，
 > 在動起來的畫面上會看到「閃爍的格線」。
+
+### 同一套邊界，為什麼 canvas 和 DOM 都要用
+
+`Renderer` 在 canvas 上畫蛇，但分數、狀態和底部提示是 DOM，位在 canvas 上方。
+因此 canvas 沒辦法直接把文字切成兩種顏色：它根本碰不到上層 DOM。
+
+`LitText.tsx:57` 的做法是把同一段文字疊兩次：
+
+```tsx
+<span className="lit">
+  {children}                                  {/* 平常看見的黑字 */}
+  <span className="lit__over" style={{ clipPath: `path("${clip}")` }}>
+    {children}                                {/* 疊在上面的白字 */}
+  </span>
+</span>
+```
+
+白字副本平常被裁掉；每次收到 state，就把蛇佔的每一格轉成 SVG path，
+只有落在那些矩形裡的白字會露出來。結果看起來就像蛇把文字「照亮」。
+
+這也解釋了為什麼 `cellEdges()` 不能繼續私藏在 `Renderer`：canvas 畫出的蛇格
+和 DOM 的遮罩只要有一邊用不同的四捨五入方式，就會錯開一個像素。
+現在 `renderer.ts:145` 和 `LitText.tsx:43` 都呼叫同一個函式，
+把「兩份演算法必須永遠同步」改成「只有一份演算法」。
+
+### 頭和食物不再只是兩個方塊
+
+`renderer.ts:88` 先把食物畫成內縮的黑色方塊，再畫蛇，最後在蛇頭加兩條圓角黑色眼睛。
+眼睛跟著 `state.direction` 旋轉；格子小於 10px 時則不畫，避免縮成一團髒掉的像素。
+這些都只是 renderer 從同一份 `GameState` 推導出的外觀，後端不需要知道「眼睛」存在。
 
 ### 另一個細節：不要每個 tick 都 resize
 
@@ -1181,10 +1226,13 @@ if (last.width !== window.innerWidth || last.height !== window.innerHeight
 
 ### 動手做
 
-把 `setTransform` 那行註解掉，存檔看看。
-在 dpr = 2 的螢幕上，畫面會縮到左上角四分之一——因為繪圖指令用的是 CSS 座標，
-但緩衝區是 2 倍大。（如果你的螢幕 dpr = 1，畫面不會有變化，這本身就說明了
-這行是在補償什麼。用瀏覽器 console 打 `window.devicePixelRatio` 可以查。）
+1. 把 `setTransform` 那行註解掉，存檔看看。
+   在 dpr = 2 的螢幕上，畫面會縮到左上角四分之一——因為繪圖指令用的是 CSS 座標，
+   但緩衝區是 2 倍大。（如果你的螢幕 dpr = 1，畫面不會有變化，這本身就說明了
+   這行是在補償什麼。用瀏覽器 console 打 `window.devicePixelRatio` 可以查。）
+2. 暫時把 `LitText.tsx:43` 的 `cellEdges(x, cellWidth)` 改成
+   `[Math.round(x * cellWidth), Math.round(cellWidth)]`，讓蛇穿過分數文字，
+   觀察遮罩邊緣為什麼偶爾會和蛇錯開。看完記得改回來。
 
 ---
 

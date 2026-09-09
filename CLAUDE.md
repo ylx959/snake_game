@@ -91,6 +91,9 @@ Two places bend that rule, both deliberately:
   with every apple. The hex values live in `web/lib/palette.ts`. The *decision*
   stays on the server; only the appearance is the client's, so a colour can be
   retuned without restarting the backend or dropping a player's run.
+  `palette` is the one field `Game.reset()` deliberately leaves alone — it is
+  set in `__init__` and nowhere else — so restarting a run keeps the colours and
+  only a new connection starts from pair 0.
 - **Board size.** The board fills the viewport, so its shape is the one piece of
   game state only the browser knows. It measures (`web/lib/board.ts`), sends
   `{"type":"resize", "width":…, "height":…}`, and the server clamps it to

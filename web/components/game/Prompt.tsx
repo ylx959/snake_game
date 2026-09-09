@@ -4,11 +4,15 @@
  * The one big line of text, in the spirit of the reference art: a single
  * sentence over a flat field, with a blinking caret after it.
  *
- * Blank while the game is running - there is nothing to say, and the row keeps
- * its height in CSS so the board never jumps.
+ * Blank while the game is running - there is nothing to say.
+ *
+ * It sits dead centre, which is where the snake starts and where it crosses
+ * most often, so the line is lit like the other readouts: black, and white
+ * wherever the snake is behind it. See `LitText`.
  */
 
-import type { ConnectionStatus, GameStatus } from "@/types/game";
+import { LitText } from "@/components/game/LitText";
+import type { ConnectionStatus, GameState, GameStatus } from "@/types/game";
 
 const PROMPT: Record<GameStatus, string> = {
   ready: "Press an arrow to start",
@@ -18,21 +22,24 @@ const PROMPT: Record<GameStatus, string> = {
 };
 
 export function Prompt({
-  status,
+  state,
   connection,
 }: {
-  status: GameStatus | null;
+  state: GameState | null;
   connection: ConnectionStatus;
 }) {
   // A dead socket outranks anything the last state said: the board on screen is
   // already stale, and reconnecting is the only thing happening.
-  const text =
-    connection === "open" ? (status ? PROMPT[status] : "") : "Connecting";
+  const text = connection === "open" ? (state ? PROMPT[state.status] : "") : "Connecting";
 
   return (
     <p className="prompt">
-      {text}
-      {text && <span className="prompt__caret" aria-hidden="true" />}
+      {text && (
+        <LitText state={state}>
+          {text}
+          <span className="prompt__caret" aria-hidden="true" />
+        </LitText>
+      )}
     </p>
   );
 }

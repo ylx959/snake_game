@@ -97,7 +97,7 @@ body {
   /* 交叉軸：對齊文字的「基線」而不是外框。
      兩段字級不同時（這裡是 SCORE 和狀態），用 center 會看起來沒對齊。 */
   align-items: baseline;
-  gap: 12px;
+  gap: 40px;
   font-size: 10px;
   letter-spacing: 0.5em; /* em = 相對於自己的 font-size，字級一改間距自動跟著變 */
 }
@@ -213,7 +213,7 @@ body {
   box-shadow: none;
 }
 
-.controls button:focus{
+.controls button:focus-visible{
   outline: none;
 }
 
@@ -249,6 +249,12 @@ body {
   top: 0;
   width: 100%;
   color: var(--paper);
+}
+
+/* 游標是用 background 畫出來的方塊，不是文字，所以上面那條 color 管不到它。
+   白色副本裡要另外翻色，不然蛇經過時字變白、游標還留在黑色。 */
+.lit__over .prompt__caret {
+  background: var(--paper);
 }
 
 /* prefers-reduced-motion 是作業系統的無障礙設定（macOS：輔助使用 → 顯示器

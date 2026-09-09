@@ -31,7 +31,7 @@ export default function Home() {
 
       <div className="ui">
         <ScoreBoard state={state} connection={connection} />
-        <Prompt status={state?.status ?? null} connection={connection} />
+        <Prompt state={state} connection={connection} />
       
 
         <div className="ui__gap" />

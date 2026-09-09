@@ -52,17 +52,25 @@ class Game:
         self.height = height
         self.tick_seconds = tick_seconds
         self._rng = random.Random(seed)
+        # The palette outlives a reset, so it is seeded here and nowhere else.
+        self.palette = 0
         self.reset()
 
     # --- setup -----------------------------------------------------------
 
     def reset(self) -> None:
+        """Start the run over, keeping the colours.
+
+        Score, board and snake all go back to the beginning; `palette` does not.
+        A reset is the same player carrying on, so the screen keeps the pair it
+        was wearing rather than snapping back to the first one. Only a new
+        connection - a new `Game` - starts from pair 0 again.
+        """
         self.snake = Snake((self.width // 2, self.height // 2), Direction.RIGHT)
         self.food: Cell | None = None
         self._respawn_food()
         self.score = 0
         self.ticks = 0
-        self.palette = 0
         self.status = GameStatus.READY
 
     def resize(self, width: int, height: int) -> None:
