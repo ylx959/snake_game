@@ -126,7 +126,7 @@ body {
   /* clamp(最小值, 理想值, 最大值)。3.5vw 是算出來的上限：最長的那句
      "Press an arrow to start" 是 23 個字，這個像素字型每個字約 1 個 em 寬，
      23 × 1.06 × 3.5vw ≈ 85% 視窗寬，所以任何視窗大小都塞得下。 */
-  font-size: clamp(14px, 3.5vw, 48px);
+  font-size: clamp(14px, 5vw, 55px);
   letter-spacing: 0.06em;
   text-align: center;
   /* 原本這裡有 min-height 撐住行高，是為了避免它消失時下面的東西往上跳。
@@ -182,11 +182,6 @@ body {
   background:rgb(231, 231, 231); /* rgb(紅, 綠, 藍)，每個 0–255 */
   border: var(--edge) solid var(--ink); /* border: 寬度 樣式 顏色（靠型別辨認，順序可換） */
   border-radius:0; /* 明確蓋掉瀏覽器給 button 的預設圓角，維持硬邊像素感 */
-  /* 只給 4 個值時 = X / Y / blur / 顏色，spread 被省略（預設 0）。
-     五個值才是 X Y blur spread 顏色——你的註解列的是完整五參數版本。
-     blur 寫 0 = 完全不模糊的硬邊陰影，這正是像素風要的。
-     ⚠️ 長度只有 0 可以不寫單位；`0.3` 這種非零值少了單位，整條宣告會被丟掉。
-     rgba 的第 4 個參數是不透明度 0–1。 */
   box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.6);/*box-shadow: X Y blur spread color;*/
   cursor: pointer;
 }
