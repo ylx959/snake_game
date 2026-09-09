@@ -30,7 +30,19 @@ export function bindKeyboard(
   target: Window | HTMLElement = window,
 ): () => void {
   const handle = (event: Event) => {
-    const message = keyToMessage((event as KeyboardEvent).key);
+    const key = (event as KeyboardEvent).key;
+
+    // Space is the one key a focused button answers by itself. Without this,
+    // clicking Pause and then pressing Space fires the button *and* this
+    // listener, and the game pauses and resumes in the same keystroke.
+    //
+    // Only Space: an earlier version ignored every key while a button had
+    // focus, which meant clicking Start left the arrow keys dead.
+    if (key === " " && (event.target as HTMLElement | null)?.closest?.("button")) {
+      return;
+    }
+
+    const message = keyToMessage(key);
     if (!message) return;
     event.preventDefault(); // stop arrow keys scrolling the page
     send(message);

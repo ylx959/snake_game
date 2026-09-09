@@ -1,140 +1,119 @@
 /**
  * Canvas renderer. Stateless with respect to the game: it is handed a
  * `GameState` and draws exactly that, so it can never disagree with the server.
+ *
+ * It draws the board and nothing else. Every piece of text - score, status,
+ * prompts, buttons - is DOM, so the pixel font is a font rather than something
+ * this file has to reimplement with `fillText`.
  */
 
-import type { Cell, GameState } from "@/types/game";
+import { INK, paletteAt } from "@/lib/palette";
+import type { Cell, Direction, GameState } from "@/types/game";
 
-export interface RendererTheme {
-  background: string;
-  grid: string;
-  snakeHead: string;
-  snakeBody: string;
-  food: string;
-}
-
-export const DEFAULT_THEME: RendererTheme = {
-  background: "#0f1117",
-  grid: "#1b1f2a",
-  snakeHead: "#5eead4",
-  snakeBody: "#2dd4bf",
-  food: "#f472b6",
+/** Where the head's two eyes sit, as fractions of a cell, per heading. */
+const EYES: Record<Direction, readonly [number, number][]> = {
+  RIGHT: [
+    [0.5, 0.2],
+    [0.5, 0.6],
+  ],
+  LEFT: [
+    [0.3, 0.2],
+    [0.3, 0.6],
+  ],
+  UP: [
+    [0.2, 0.3],
+    [0.6, 0.3],
+  ],
+  DOWN: [
+    [0.2, 0.5],
+    [0.6, 0.5],
+  ],
 };
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
+const EYE_RATIO = 0.2;
+/** Below this the eyes are a smudge, so they are dropped instead. */
+const MIN_CELL_FOR_EYES = 10;
+/** How far the apple is inset, so it reads as an object and not a wall tile. */
+const FOOD_INSET = 0.14;
 
 export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
-  private cellSize = 0;
+  private cellWidth = 0;
+  private cellHeight = 0;
 
-  constructor(
-    private readonly canvas: HTMLCanvasElement,
-    private readonly theme: RendererTheme = DEFAULT_THEME,
-  ) {
+  constructor(private readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("2D canvas context unavailable");
     this.ctx = ctx;
   }
 
   /**
-   * Size the canvas to the board. Call whenever the board dimensions or the
-   * available pixel width change; `cssSize` is the on-screen edge length.
+   * Size the canvas to the viewport. The board fills it exactly, so the cell
+   * size is whatever the board divides into - fractional, and very slightly
+   * non-square when the viewport does not divide evenly.
+   *
+   * That fraction never reaches the screen: `bounds()` rounds each cell's edges
+   * to whole pixels, and neighbours round the shared edge to the same integer.
+   * Squares stay hard-edged and butt together with no seam between them.
    */
-  resize(state: GameState, cssSize: number): void {
+  resize(state: GameState, boxWidth: number, boxHeight: number): void {
     const dpr = window.devicePixelRatio || 1;
-    // `cssSize` bounds the longest edge; each axis then gets its own extent so
-    // a non-square board is not stretched into a square.
-    // At least 1px: a board longer than `cssSize` would otherwise floor to a
-    // zero-sized canvas and draw nothing at all.
-    this.cellSize = Math.max(1, Math.floor(cssSize / Math.max(state.width, state.height)));
-    const width = this.cellSize * state.width;
-    const height = this.cellSize * state.height;
 
-    this.canvas.style.width = `${width}px`;
-    this.canvas.style.height = `${height}px`;
-    this.canvas.width = width * dpr;
-    this.canvas.height = height * dpr;
+    this.canvas.style.width = `${boxWidth}px`;
+    this.canvas.style.height = `${boxHeight}px`;
+    this.canvas.width = Math.round(boxWidth * dpr);
+    this.canvas.height = Math.round(boxHeight * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.ctx.imageSmoothingEnabled = false;
+
+    this.cellWidth = boxWidth / state.width;
+    this.cellHeight = boxHeight / state.height;
   }
 
   draw(state: GameState): void {
-    const { ctx, cellSize } = this;
-    const w = state.width * cellSize;
-    const h = state.height * cellSize;
+    const { ctx } = this;
+    const { bg, fg } = paletteAt(state.palette);
 
-    ctx.fillStyle = this.theme.background;
-    ctx.fillRect(0, 0, w, h);
-    this.drawGrid(state);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, state.width * this.cellWidth, state.height * this.cellHeight);
 
-    if (state.food) this.fillCell(state.food, this.theme.food, 0.28);
+    if (state.food) this.fillCell(state.food, INK, FOOD_INSET);
+    for (const cell of state.snake) this.fillCell(cell, fg, 0);
+    this.drawEyes(state);
+  }
 
-    state.snake.forEach((cell, index) => {
-      this.fillCell(cell, index === 0 ? this.theme.snakeHead : this.theme.snakeBody, 0.22);
-    });
+  /** Two black pixels on the head, so you can tell which end is which. */
+  private drawEyes(state: GameState): void {
+    const { ctx } = this;
+    const [left, top, width, height] = this.bounds(state.snake[0]);
+    if (Math.min(width, height) < MIN_CELL_FOR_EYES) return;
 
-    if (state.status === "game_over") {
-      this.drawOverlay(state, "GAME OVER", `Score ${state.score} · press R to restart`);
-    } else if (state.status === "paused") {
-      this.drawOverlay(state, "PAUSED", "press Space to resume");
-    } else if (state.status === "ready") {
-      this.drawOverlay(state, "READY", "press an arrow key to start");
+    const size = Math.max(2, Math.round(Math.min(width, height) * EYE_RATIO));
+
+    ctx.fillStyle = INK;
+    for (const [ox, oy] of EYES[state.direction]) {
+      ctx.fillRect(left + Math.round(width * ox), top + Math.round(height * oy), size, size);
     }
   }
 
-  /** Dims the board and centres a title with a smaller line beneath it. */
-  private drawOverlay(state: GameState, title: string, hint: string): void {
-    const { ctx, cellSize } = this;
-    const w = state.width * cellSize;
-    const h = state.height * cellSize;
+  private fillCell(cell: Cell, color: string, inset: number): void {
+    const [left, top, width, height] = this.bounds(cell);
+    const padX = Math.round(width * inset);
+    const padY = Math.round(height * inset);
 
-    ctx.fillStyle = "rgba(15, 17, 23, 0.72)";
-    ctx.fillRect(0, 0, w, h);
-
-    // Type is sized from the rendered board, not from a cell. Cell size tracks
-    // the board's dimensions - a 160x90 board has 3px cells - so text scaled
-    // from it silently becomes unreadable when the board grows.
-    const titleSize = clamp(Math.min(w, h) * 0.12, 18, 64);
-    const hintSize = clamp(titleSize * 0.42, 11, 22);
-
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    ctx.fillStyle = this.theme.snakeHead;
-    ctx.font = `600 ${Math.round(titleSize)}px ui-sans-serif, system-ui, sans-serif`;
-    ctx.fillText(title, w / 2, h / 2 - titleSize * 0.4);
-
-    ctx.fillStyle = "rgba(230, 232, 239, 0.75)";
-    ctx.font = `${Math.round(hintSize)}px ui-sans-serif, system-ui, sans-serif`;
-    ctx.fillText(hint, w / 2, h / 2 + titleSize * 0.75);
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(left + padX, top + padY, width - padX * 2, height - padY * 2);
   }
 
-  private drawGrid(state: GameState): void {
-    const { ctx, cellSize } = this;
-    ctx.strokeStyle = this.theme.grid;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = 0; x <= state.width; x += 1) {
-      ctx.moveTo(x * cellSize + 0.5, 0);
-      ctx.lineTo(x * cellSize + 0.5, state.height * cellSize);
-    }
-    for (let y = 0; y <= state.height; y += 1) {
-      ctx.moveTo(0, y * cellSize + 0.5);
-      ctx.lineTo(state.width * cellSize, y * cellSize + 0.5);
-    }
-    ctx.stroke();
-  }
-
-  /** `radiusRatio` rounds the corners as a fraction of the cell size. */
-  private fillCell([x, y]: Cell, color: string, radiusRatio: number): void {
-    const { ctx, cellSize } = this;
-    const pad = Math.max(1, cellSize * 0.08);
-    const size = cellSize - pad * 2;
-
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.roundRect(x * cellSize + pad, y * cellSize + pad, size, size, size * radiusRatio);
-    ctx.fill();
+  /** A cell's pixel rectangle, snapped to whole pixels on every edge. */
+  private bounds([x, y]: Cell): [number, number, number, number] {
+    const left = Math.round(x * this.cellWidth);
+    const top = Math.round(y * this.cellHeight);
+    return [
+      left,
+      top,
+      Math.round((x + 1) * this.cellWidth) - left,
+      Math.round((y + 1) * this.cellHeight) - top,
+    ];
   }
 }

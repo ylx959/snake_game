@@ -23,6 +23,11 @@ export interface GameState {
   snake: Cell[];
   direction: Direction;
   food: Cell | null;
+  /**
+   * Which colour pair the board is wearing. An index, never a colour: the hex
+   * values live in `lib/palette.ts`. Advances by one with every apple.
+   */
+  palette: number;
 }
 
 /** Anything the server pushes down the socket. */
@@ -33,6 +38,12 @@ export type ClientMessage =
   | { type: "turn"; direction: Direction }
   | { type: "start" }
   | { type: "pause" }
-  | { type: "reset" };
+  | { type: "reset" }
+  /**
+   * The board fills the viewport, so its shape is the one piece of game state
+   * only the browser knows. The server clamps what it is given and starts the
+   * run over; see `gridForViewport` in `lib/board.ts`.
+   */
+  | { type: "resize"; width: number; height: number };
 
 export type ConnectionStatus = "connecting" | "open" | "closed";

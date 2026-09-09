@@ -27,9 +27,11 @@ export function ScoreBoard({
     connection === "open" ? (STATUS_LABEL[state?.status ?? ""] ?? "…") : connection;
 
   return (
-    <header className="game__hud">
-      <span className="game__score">Score {state?.score ?? 0}</span>
-      <span className="game__status" data-connection={connection}>
+    <header className="hud">
+      <span className="hud__score">
+        Score {String(state?.score ?? 0).padStart(3, "0")}
+      </span>
+      <span className="hud__status" data-connection={connection}>
         {label}
       </span>
     </header>

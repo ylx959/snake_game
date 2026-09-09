@@ -1,137 +1,176 @@
+/*
+ * Two colours and black. Everything on screen is `--bg`, `--fg` or `--ink`;
+ * the page sets the first two from the palette index the server sent, so a
+ * bite of the apple repaints the whole document at once.
+ */
+
 :root {
-  --bg: #0b0d12;
-  --surface: #12151d;
-  --border: #232838;
-  --text: #e6e8ef;
-  --muted: #8b93a7;
-  --accent: #2dd4bf;
+  /* Palette 0, so server-rendered HTML paints the right colour before React
+     hydrates and takes over. Kept in step with lib/palette.ts. */
+  --bg: #00d6f0;
+  --fg: #f5001e;
+  --ink: #000000;
+
+  /* One knob for the chunky border-and-drop-shadow look. */
+  --edge: 4px;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   background: var(--bg);
-  color: var(--text);
-  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-}
-
-.page {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  padding: 24px;
-}
-
-.page__title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
+  color: var(--ink);
+  font-family: var(--font-pixel), ui-monospace, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.6;
   text-transform: uppercase;
-  color: var(--muted);
+  /* The board is the page. Nothing here is ever meant to scroll. */
+  overflow: hidden;
+  /* Pixel type is drawn at exact sizes; smoothing only blurs the edges. */
+  -webkit-font-smoothing: none;
 }
 
-.game {
+/* The board is the page: the canvas covers the window and the readouts float
+   on top of it, so the snake runs behind the text and the buttons. */
+.screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+}
+
+.board {
+  position: fixed;
+  inset: 0;
+  display: block;
+  image-rendering: pixelated;
+}
+
+.ui {
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
   align-items: center;
+  gap: 14px;
+  padding: 18px clamp(14px, 4vw, 48px) 22px;
+  /* The board owns the window; only the controls take clicks back. */
+  pointer-events: none;
 }
 
-.game__hud {
+.ui__gap {
+  flex: 1 1 auto;
+}
+
+/* --- top row ------------------------------------------------------------- */
+
+.hud {
+  width: 100%;
+  max-width: 960px;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  font-variant-numeric: tabular-nums;
-}
-
-.game__score {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.game__status {
-  font-size: 12px;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 10px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
 }
 
-.game__status[data-connection="open"] {
-  color: var(--accent);
+.hud__status[data-connection="closed"] {
+  animation: blink 1s steps(1, end) infinite;
 }
 
-.game__canvas {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  display: block;
+/* --- the one big line, as in the reference art --------------------------- */
+
+.prompt {
+  margin: 0;
+  font-size: clamp(13px, 2.6vw, 26px);
+  letter-spacing: 0.06em;
+  text-align: center;
+  /* Reserve the row even when empty, so the board does not jump on pause. */
+  min-height: 1.5em;
 }
 
-.game__controls {
+.prompt__caret {
+  display: inline-block;
+  width: 0.14em;
+  height: 0.95em;
+  margin-left: 0.2em;
+  vertical-align: -0.1em;
+  background: var(--ink);
+  animation: blink 1s steps(1, end) infinite;
+}
+
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* --- controls ------------------------------------------------------------ */
+
+.controls {
+  pointer-events: auto;
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 15px;
 }
 
-.game__controls button {
-  padding: 7px 16px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--text);
+.controls button {
   font: inherit;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 11px 16px;
+  color: var(--ink);
+  background:rgb(231, 231, 231);
+  border: var(--edge) solid var(--ink);
+  border-radius:0;
+  box-shadow: 5px 5px 0 var(--ink);
   cursor: pointer;
 }
 
-.game__controls button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.game__hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.page__lede {
-  margin: 0;
-  max-width: 34ch;
-  text-align: center;
-  color: var(--muted);
-}
-
-.page__cta {
-  padding: 9px 26px;
-  border: 1px solid var(--accent);
-  border-radius: 7px;
-  color: var(--accent);
-  text-decoration: none;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-size: 13px;
-}
-
-.page__cta:hover {
-  background: var(--accent);
+.controls button:hover {
+  background: var(--ink);
   color: var(--bg);
 }
 
-.page__back {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  color: var(--muted);
-  text-decoration: none;
-  font-size: 13px;
+/* Press the button into its own shadow. */
+.controls button:active {
+  transform: translate(5px, 5px);
+  box-shadow: none;
 }
 
-.page__back:hover {
-  color: var(--text);
+.controls button:focus-visible {
+  outline: none;
+}
+
+
+
+.hint {
+  margin: 10;
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  text-align: center;
+  opacity: 1;
+}
+
+/* A blinking caret and a hard colour flip every apple is a lot of motion. */
+@media (prefers-reduced-motion: reduce) {
+  .prompt__caret,
+  .hud__status[data-connection="closed"] {
+    animation: none;
+  }
 }
