@@ -173,10 +173,11 @@ class Game:
         """
         free = [
             (x, y)
-            for y in range(self.height)
-            for x in range(self.width)
+            for y in range(1,self.height-1)
+            for x in range(1,self.width-1)
             if not self.snake.occupies((x, y))
         ]
+
         if not free:
             self.food = None
             return False
