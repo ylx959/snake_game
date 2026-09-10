@@ -275,7 +275,7 @@ Next.js 16 **移除了 `next lint` 指令**，但 `package.json` 裡還留著舊
 裝了 `eslint` + `eslint-config-next`，加上 `web/eslint.config.mjs`（flat config），
 並把 script 改成 `"lint": "eslint ."`。
 
-#### 坑 3：點過 Start 之後，方向鍵全部失效
+#### 坑 3：點過按鈕之後，鍵盤就不聽話了
 
 這個是自己種的。`lib/input.ts` 綁在 `window` 上聽 `keydown`。
 問題是：**如果按鈕有焦點，按 Space 會同時觸發按鈕的 click 和這個 listener**，
@@ -290,15 +290,36 @@ if (event.target?.closest?.("button, a, input, textarea")) return;   // ← 太�
 它修好了 Space，但**順手廢掉了方向鍵**：點一下 Start，焦點留在按鈕上，
 之後所有方向鍵都被這行擋掉，蛇再也轉不了彎。
 
-**修法**：按鈕原生只回應 Space 和 Enter，所以只擋 Space 就夠了。
+第二版把範圍收窄到只擋 Space：
 
 ```ts
-if (key === " " && event.target?.closest?.("button")) return;
+if (key === " " && event.target?.closest?.("button")) return;   // ← 還是錯的
 ```
 
-> **教訓**：防護性的 early return 很容易寫得比需要的更寬。
-> 寫下 `return` 之前先問：**「我到底想擋掉哪些輸入？」**
-> 答案如果是「一種」，就不要寫成「一類」。
+方向鍵活了，但 Space 反而被**送給按鈕**了。點過一次 Reset，焦點就留在那顆按鈕上，
+之後每次按 Space 都是 reset——畫面上的提示寫著「SPACE TO PAUSE」，
+實際行為卻是「重新開始」。這比第一版更難發現：它不是壞掉，是**變成另一個指令**。
+
+**真正的修法**：不要讓瀏覽器有機會處理它。
+
+```ts
+const message = keyToMessage(key);
+if (!message) return;
+event.preventDefault();   // ← 這行同時擋掉「方向鍵捲動頁面」和「Space 按下按鈕」
+send(message);
+```
+
+關鍵在時序：`<button>` 的 Space 是在 **keyup** 才送出 click 的，
+所以在 keydown 取消掉這個事件，那個 click 就永遠不會發生。
+Enter 不受影響（它在 keydown 就直接觸發 click），按鈕仍然能純鍵盤操作。
+
+> **教訓**：防護性的 early return 很容易寫得比需要的更寬——但把它收窄也不一定就對。
+> 這裡真正的問題不是「該擋哪些輸入」，而是**「誰該回應這個按鍵」**。
+> 答案是「一律由遊戲回應」的時候，正確的工具是 `preventDefault()`，
+> 而不是想辦法判斷焦點在哪裡。
+>
+> 附帶條件：這頁沒有任何輸入框。哪天加了 `<input>`，
+> 打字打到 `w`、`a`、`s`、`d`、空白鍵就會被吃掉，那時才需要判斷事件來源。
 
 ### 為什麼要用 `127.0.0.1` 而不是 `localhost`
 

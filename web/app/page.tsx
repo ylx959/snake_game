@@ -38,7 +38,8 @@ export default function Home() {
 
         <footer className="controls">
           <StartPauseButton status={state?.status ?? null} send={send} />
-          <button type="button" onClick={() => send({ type: "reset" })}>
+          {/* data-key: R presses this button; lib/input.ts routes it here. */}
+          <button type="button" data-key="r" onClick={() => send({ type: "reset" })}>
             Reset
           </button>
         </footer>

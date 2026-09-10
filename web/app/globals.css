@@ -200,8 +200,12 @@ body {
   color: var(--bg);
 }
 
-/* Press the button into its own shadow. */
-.controls button:active:not(:disabled) {
+/* Press the button into its own shadow.
+   [data-pressed] 是鍵盤版：Space / R 按住的時候，lib/input.ts 會把這個屬性
+   加在對應的按鈕上，讓鍵盤看起來跟滑鼠按下去一模一樣。
+   屬性選擇器只看「有沒有這個屬性」，值是空字串也算有。 */
+.controls button:active:not(:disabled),
+.controls button[data-pressed]:not(:disabled) {
   /* translate(X, Y)：正值往右／往下。位移剛好等於上面陰影的偏移量，
      再把 box-shadow 拿掉，看起來就像按鈕被壓進自己的影子裡。 */
   transform: translate(5px, 5px);

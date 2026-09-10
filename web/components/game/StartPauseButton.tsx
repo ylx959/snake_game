@@ -31,6 +31,9 @@ export function StartPauseButton({
   return (
     <button
       type="button"
+      // Space presses this button rather than sending a command of its own, so
+      // the key and the label can never mean different things. See lib/input.ts.
+      data-key="space"
       // Both labels are five characters, so the row never reflows on a toggle.
       disabled={status === "game_over"}
       onClick={() => send({ type: running ? "pause" : "start" })}

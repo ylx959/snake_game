@@ -161,10 +161,19 @@ Two rendering details are load-bearing:
 - `GameCanvas` resizes the canvas only when the window or the board actually
   changed, never on a tick: resizing reallocates the backing store and wipes it.
 
-`lib/input.ts` skips **only Space** when a button has focus, because a focused
-button answers Space itself and would otherwise pause and resume in one
-keystroke. Do not widen that to all keys — an earlier version did, and clicking
-Start left the arrow keys dead.
+`lib/input.ts` calls `preventDefault()` on every key it recognises, and that is
+load-bearing for **Space**. A focused button answers Space by itself, so after
+one click on Reset the browser turned every later Space into another reset —
+exactly what the hint says Space does not do. Cancelling the keydown stops the
+button (its click fires on Space *keyup*), so Space always reaches the game.
+Enter still activates a focused button, which is what keeps the controls
+reachable from the keyboard.
+
+Two earlier attempts at this were wrong: ignoring all keys while a button had
+focus killed the arrow keys after a click, and ignoring only Space is what left
+Space bound to the last button clicked. Do not reintroduce either guard. It is
+safe here only because the page has no text fields — add one and it will need
+to opt out.
 
 The `@/*` path alias maps to the **web root**, not `src/` — there is no `src/`.
 
