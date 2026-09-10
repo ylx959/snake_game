@@ -218,12 +218,12 @@ body {
      按鈕預設「不」繼承頁面字型，沒這行就會變回系統 UI 字。
      ⚠️ 順序有意義：簡寫會把 font-size 一起重設，所以下一行的 9px 必須寫在它後面。 */
   font: inherit;
-  font-size: max(6px, calc(var(--cell) * 0.31)); /* 同 .hud，以格為單位 */
+  font-size: max(8px, calc(var(--cell) * 0.31)); /* 同 .hud，以格為單位 */
   letter-spacing: 0.1em;
   text-transform: uppercase;
   /* 兩個值 = 上下 / 左右。改用 em（1.2em ≈ 原本的 11px、1.8em ≈ 16px），
      所以按鈕的內距是跟著字級走的——字變小，整顆按鈕就跟著變小。 */
-  padding: 1.2em 1.8em;
+  padding: 10px 15px;
   color: var(--ink);
   background:rgb(231, 231, 231); /* rgb(紅, 綠, 藍)，每個 0–255 */
   border: var(--edge) solid var(--ink); /* border: 寬度 樣式 顏色（靠型別辨認，順序可換） */

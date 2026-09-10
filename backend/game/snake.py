@@ -29,7 +29,6 @@ class Direction(Enum):
         dx, dy = self.value
         return Direction((-dx, -dy))
 
-
 def direction_from_name(name: str) -> Direction | None:
     """Wire name, e.g. "UP". `None` for anything unrecognised, so a malformed
     client message is ignored rather than fatal."""
