@@ -32,17 +32,28 @@ function useSnakeClip(ref: RefObject<HTMLElement | null>, state: GameState | nul
       return;
     }
 
-    // `clip-path` resolves against the element's own box, but the snake's cells
-    // are in viewport coordinates, so every rectangle shifts by that offset.
+    // The cells are laid out inside the board, not the window, so the board's
+    // own box is what they are measured against. Reading it back from the DOM
+    // rather than recomputing the fit is what guarantees the mask lands exactly
+    // where the canvas painted - there is only ever one answer.
+    const stage = element.closest(".stage");
+    if (!stage) {
+      setClip(NOTHING);
+      return;
+    }
+
+    // `clip-path` resolves against the element's own box, so every rectangle
+    // shifts by the distance between that box and the board's.
     const box = element.getBoundingClientRect();
-    const cellWidth = window.innerWidth / state.width;
-    const cellHeight = window.innerHeight / state.height;
+    const board = stage.getBoundingClientRect();
+    const cellWidth = board.width / state.width;
+    const cellHeight = board.height / state.height;
 
     const path = state.snake
       .map(([x, y]) => {
         const [left, width] = cellEdges(x, cellWidth);
         const [top, height] = cellEdges(y, cellHeight);
-        return `M${left - box.left} ${top - box.top}h${width}v${height}h${-width}Z`;
+        return `M${board.left + left - box.left} ${board.top + top - box.top}h${width}v${height}h${-width}Z`;
       })
       .join("");
 

@@ -71,8 +71,9 @@
 
 - **吃到蘋果整個畫面翻色** —— 「翻到第幾組」是伺服器決定的，
   但「第幾組長什麼樣」是瀏覽器的事。伺服器只送一個整數
-- **盤面鋪滿整個視窗** —— 「視窗多大」只有瀏覽器知道，
-  所以它得往上送；但伺服器收到之後**沒有照單全收**，它會夾在合法範圍內才採用
+- **棋盤多大** —— 一開始是「滿版，格子數跟著視窗走」，所以瀏覽器得把量到的
+  尺寸往上送；後來改成固定 16:9、伺服器說了算，這個例外就整個消失了。
+  第 2 章會把「例外怎麼被設計掉」的過程完整走一遍
 
 第 2 章會把這兩個決定拆開講，包括每個被否決的替代方案為什麼被否決。
 
@@ -129,8 +130,8 @@
 > 貪食蛇只是尺寸剛好小到你能一次看完全部。
 
 「幾乎」兩個字很重要。有**一件事只有瀏覽器知道**：視窗多大。
-盤面是滿版的，所以格子數必須跟著視窗走，而視窗是瀏覽器那邊的東西。
-這條例外怎麼處理，是第 2 章的重點。
+問題是這件事該影響什麼——影響「棋盤有幾格」，還是只影響「棋盤畫多大」？
+這兩個答案會長出完全不同的架構，而這個專案兩種都寫過。第 2 章是這一段的重點。
 
 ### 資料的流向
 
@@ -190,7 +191,7 @@ npm run dev              # http://127.0.0.1:3000
 
 打開 <http://127.0.0.1:3000>。
 
-### 為什麼要 venv
+### 為什麼要 venv(python 版的node modules)
 
 `python3 -m venv .venv` 建立一個**專屬於這個專案的 Python 環境**。
 之後 `pip install` 裝的東西只會進到 `backend/.venv/`，不會污染系統。
@@ -300,26 +301,73 @@ if (key === " " && event.target?.closest?.("button")) return;   // ← 還是錯
 之後每次按 Space 都是 reset——畫面上的提示寫著「SPACE TO PAUSE」，
 實際行為卻是「重新開始」。這比第一版更難發現：它不是壞掉，是**變成另一個指令**。
 
-**真正的修法**：不要讓瀏覽器有機會處理它。
+**真正的修法**：先問對問題。前兩版都在問「這個按鍵要不要擋掉」，
+但真正的問題是**「誰該定義這個按鍵的意思」**。
+
+畫面上明明就有一顆按鈕寫著 Start／Pause，它已經知道現在該送 `start` 還是 `pause`、
+知道 game over 時要 disabled。鍵盤沒有理由再自己重新定義一次——**讓按鍵去按那顆按鈕**就好：
 
 ```ts
-const message = keyToMessage(key);
-if (!message) return;
-event.preventDefault();   // ← 這行同時擋掉「方向鍵捲動頁面」和「Space 按下按鈕」
-send(message);
+// 按鈕自己宣告它認哪個鍵
+<button data-key="space" …>{running ? "Pause" : "Start"}</button>
+
+// input.ts 只負責轉接
+const button = document.querySelector(`button[data-key="${name}"]`);
+if (!button) return;
+event.preventDefault();               // ← 擋掉瀏覽器自己的 Space 行為
+if (repeat || button.disabled) return;
+button.dataset.pressed = "";          // ← 順便讓按鈕看起來被按下去
+button.click();
 ```
 
-關鍵在時序：`<button>` 的 Space 是在 **keyup** 才送出 click 的，
-所以在 keydown 取消掉這個事件，那個 click 就永遠不會發生。
-Enter 不受影響（它在 keydown 就直接觸發 click），按鈕仍然能純鍵盤操作。
+這樣做有三件事是免費送的：
+
+1. **鍵盤和滑鼠不可能不一致**——它們走同一條路，指令只定義在一個地方。
+2. **disabled 自動生效**——game over 時按 Space 不會有動作，不用另外判斷狀態。
+3. **看得到回饋**——`data-pressed` 在 CSS 裡跟 `:active` 用同一組樣式，
+   按鍵盤和按滑鼠長得一模一樣。
+
+`preventDefault()` 還是要留著，關鍵在時序：`<button>` 的 Space 是在 **keyup**
+才送出 click 的，所以在 keydown 取消掉，瀏覽器那次 click 就永遠不會發生，
+只剩我們自己呼叫的那一次。Enter 則刻意不擋（它在 keydown 就觸發 click），
+所以純鍵盤操作的人 Tab 過去按 Enter 仍然按得動按鈕。
 
 > **教訓**：防護性的 early return 很容易寫得比需要的更寬——但把它收窄也不一定就對。
-> 這裡真正的問題不是「該擋哪些輸入」，而是**「誰該回應這個按鍵」**。
-> 答案是「一律由遊戲回應」的時候，正確的工具是 `preventDefault()`，
-> 而不是想辦法判斷焦點在哪裡。
+> 連續兩版都修錯，通常代表問題本身問錯了。
+> 這裡從「要擋哪些鍵」改成「誰擁有這個指令」之後，bug 不是被修掉，是**沒有地方可以發生**。
 >
 > 附帶條件：這頁沒有任何輸入框。哪天加了 `<input>`，
 > 打字打到 `w`、`a`、`s`、`d`、空白鍵就會被吃掉，那時才需要判斷事件來源。
+
+#### 坑 4：Space 有反應，R 沒有
+
+同一次改動加上去的兩個鍵，一個動一個不動——這種「不對稱」通常就是線索：
+它們一定有哪裡不一樣。差別在**輸入法**。
+
+`KeyboardEvent` 有兩個看起來很像的欄位：
+
+| 欄位 | 意思 | 按下鍵盤上 W 那個位置時 |
+|---|---|---|
+| `event.key` | 這次按鍵**產生的字元** | `"w"`；但注音輸入法可能給你 `"Process"` |
+| `event.code` | 這顆鍵在鍵盤上的**位置** | 永遠是 `"KeyW"` |
+
+輸入法在中文模式下會先攔截字母鍵，交給瀏覽器的 `key` 是 `"Process"`
+（表示「這個按鍵我處理掉了」），所以 `key === "r"` 永遠不成立。
+空白鍵不受影響，因為它通常直接放行——於是就出現了「Space 會動、R 不會」。
+
+**修法**：認位置，不認字元。
+
+```ts
+if (code.startsWith("Key")) return code.slice(3).toLowerCase();   // KeyR -> "r"
+if (code === "Space") return "space";
+```
+
+順帶也修好另一件事：非 QWERTY 排列（Dvorak、AZERTY）上，`event.key`
+的 `w`/`a`/`s`/`d` 根本不在左手那四格。**WASD 從來就是在講位置**，
+用 `code` 才是原本就該有的寫法。
+
+> **教訓**：兩個東西一起加、只壞一個的時候，先去找**它們的差異**，
+> 而不是重看那段共用的邏輯——共用的部分兩邊都跑過了，它不可能是原因。
 
 ### 為什麼要用 `127.0.0.1` 而不是 `localhost`
 
@@ -404,8 +452,11 @@ def opposite(self) -> "Direction":
 ```json
 {"type":"turn","direction":"UP"}   {"type":"start"}
 {"type":"pause"}                   {"type":"reset"}
-{"type":"resize","width":69,"height":30}
+{"type":"resize","width":64,"height":36}
 ```
+
+（最後那個 `resize` 現在**前端不會送**了——棋盤是固定的 48×27。
+它留在協定裡也留著測試，第 2 章會說明為什麼它曾經存在、又為什麼被設計掉。）
 
 ### ⚠️ 這個專案最重要的一條規則
 
@@ -434,10 +485,10 @@ def opposite(self) -> "Direction":
 「現在是第幾組」算不算遊戲狀態？
 
 算。因為它是從「吃了幾顆」推出來的，而那是伺服器的事。
-所以 `Game` 存了一個 `palette` 整數，每吃一顆 `+1` 再對 6 取模
-（`backend/game/game.py:27` 的 `PALETTE_COUNT`），然後把**這個整數**送下去。
+所以 `Game` 存了一個 `palette` 整數，每吃一顆 `+1` 再對 `PALETTE_COUNT` 取模
+（`backend/game/game.py:27`），然後把**這個整數**送下去。
 
-而那六組色碼住在 `web/lib/palette.ts`：
+而那幾組色碼住在 `web/lib/palette.ts`：
 
 ```ts
 export const PALETTES: readonly Palette[] = [
@@ -456,50 +507,79 @@ export const PALETTES: readonly Palette[] = [
 送索引把**「決定」留在伺服器、「外觀」留在瀏覽器**，兩邊都只管自己該管的。
 這是這個專案裡「介面該切在哪」最乾淨的一個例子。
 
-#### 例外二：棋盤大小 —— 瀏覽器測量，伺服器裁決
+#### 例外二：棋盤大小 —— 一個被「設計掉」的例外
 
-盤面是滿版的，格子數必須跟著視窗走。而**視窗多大只有瀏覽器知道**——
-伺服器不可能猜得到。
+這一條比較有意思，因為它的結局是**這個例外不存在了**。
 
-所以流向是反的：瀏覽器量完（`web/lib/board.ts` 的 `gridForViewport`，
-用「一格大約 28 CSS 像素」回推格數），送一包
-`{"type":"resize","width":69,"height":30}` 上去。
+**第一版**：盤面鋪滿整個視窗，所以格子數必須跟著視窗走。而視窗多大只有瀏覽器
+知道，於是流向是反的——瀏覽器量完（`board.ts` 用「一格大約 28 CSS 像素」回推格數），
+送一包 `{"type":"resize","width":69,"height":30}` 上去，伺服器夾在
+`MIN_DIMENSION..MAX_DIMENSION` 之內才採用，然後 `reset()`。
 
-但注意**伺服器沒有照單全收**（`backend/game/game.py:68`）：
+它能動，但拖著三個問題：
+
+1. **改變視窗大小 = 重開一局**。不 reset 的話，視窗縮小後蛇可能有一半在棋盤外，
+   得決定「截斷？傳送？直接判死？」——每個答案都比「重開」更讓人困惑。
+   所以只好重開，但這對玩家來說就是「我不小心拉了一下視窗，我的分數沒了」。
+2. **每個人的棋盤不一樣大**。27 吋螢幕 69×30、筆電 51×28，分數根本不能比。
+3. **蛇的大小不會跟著視窗變**。視窗變大不是「同一盤變大」，而是「格子變多」，
+   一格永遠是 28px 左右。
+
+**第二版**：把棋盤釘死成 `48×27`（正好 16:9），**伺服器擁有它**，跟其他規則一樣。
+瀏覽器只決定一件事：畫多大。
+
+```ts
+// web/lib/board.ts
+export function fitBoard(viewWidth, viewHeight, cols, rows): BoardRect {
+  // 取「寬能容納幾 px 一格」和「高能容納幾 px 一格」的較小值，再無條件捨去成整數
+  const cell = Math.max(1, Math.floor(Math.min(viewWidth / cols, viewHeight / rows)));
+  const width = cell * cols;     // 兩邊都是同一個 cell 的倍數，
+  const height = cell * rows;    // 所以長寬比精準等於 cols:rows
+  return { left: Math.round((viewWidth - width) / 2), top: …, width, height, cell };
+}
+```
+
+三個問題一次消失：視窗怎麼拉都不會重開一局（**根本沒有東西被送到伺服器**）、
+所有人的棋盤都是 48×27、視窗變大就是整盤等比例放大——蛇、蘋果、文字全部一起變大。
+
+`Math.floor` 那一下是關鍵：格子是**整數 px 且完全正方**，除不盡的餘數變成棋盤
+四周的黑邊（letterbox），而不是被抹進每一格裡變成小數。像素風要的就是這個。
+
+而「整個介面一起等比例縮放」是靠一個 CSS 變數做到的：`page.tsx` 把量到的
+`cell` 寫成 `--cell` 放在 `.stage` 上，`globals.css` 裡所有尺寸都是它的倍數：
+
+```css
+.hud             { font-size: max(6px, calc(var(--cell) * 0.34)); }
+.prompt          { font-size: max(12px, calc(var(--cell) * 1.35)); }
+.controls button { font-size: max(6px, calc(var(--cell) * 0.31)); }
+```
+
+> **一般性的教訓**：碰到「這件事只有 A 知道，但決定權該在 B」的時候，
+> 標準解法是「A 送測量值，B 保留裁決權」——第一版就是這樣做的，而且做對了。
+> 但**還有一個更好的問題可以問**：這件事有必要影響那個決定嗎？
+> 把「棋盤幾格」和「棋盤畫多大」拆開之後，前者根本不需要瀏覽器參與，
+> 整條資料流就消失了。**能刪掉的介面，比設計得再漂亮的介面都好。**
+
+那伺服器的 `resize()` 呢？它還在，測試也還在（`pytest -k resize`），
+只是現在沒有客戶端會送。留著的理由是它示範了另一件重要的事——
+**伺服器永遠不照單全收**：
 
 ```python
 def resize(self, width: int, height: int) -> None:
-    width = min(max(width, MIN_DIMENSION), MAX_DIMENSION)
-    height = min(max(height, MIN_DIMENSION), MAX_DIMENSION)
-    if width == self.width and height == self.height:
-        return
-    self.width = width
-    self.height = height
-    self.reset()
+    width = min(max(width, MIN_DIMENSION), MAX_DIMENSION)   # 夾到 8..240
+    ...
 ```
 
-三件事值得看：
-
-1. **夾到 8..240**。瀏覽器送什麼都不能讓伺服器配一個 100000×100000 的棋盤。
-   「客戶端量測，伺服器裁決」——量測可以外包，**裁決不行**
-2. **一樣大就直接 return**。因為改變大小會 `reset()`，不擋掉的話每次
-   重新連線都會無故重開一局
-3. **改變大小 = 重開一局**。這是刻意的取捨：不 reset 的話，視窗縮小後蛇可能
-   有一半在棋盤外，得決定「截斷？傳送？直接判死？」——每個答案都比「重開」更讓人困惑。
-   （注意它是呼叫 `reset()`，所以連配色不會歸零這件事也一起繼承了。）
-
-前端那側也配合做了兩件事（`web/hooks/useSnakeGame.ts:51`）：格數**沒真的變**就不送，
-以及視窗拖曳時 debounce 250ms 只送最後停下來的尺寸。
-
-> **一般性的教訓**：當某個資訊「只有 A 知道，但決定權該在 B」時，
-> 不要把決定權搬給 A，而是讓 A 把**測量結果**送給 B，B 保留裁決權。
+不夾的話，一個惡意的客戶端可以叫伺服器配一個 100000×100000 的棋盤。
+**量測可以外包，裁決不行。**
 
 ### 動手做
 
 1. 打開兩個檔案並排看：`backend/game/game.py:139` 和 `web/types/game.ts`。
    逐欄位對照一次，確認每個欄位兩邊都有。
-2. 把瀏覽器視窗拉窄再放開，觀察格子數變了、而且那一局重開了。
-   然後看 `useSnakeGame.ts:51` 的 debounce，想想為什麼拖曳過程中不會一直重開。
+2. 玩到一半把瀏覽器視窗拉大拉小，觀察**分數和蛇都沒有變**，只有整盤等比例縮放，
+   而且黑邊的厚度隨著視窗形狀改變。打開 DevTools 看 `.stage` 的 `--cell`
+   跟著變、長寬比永遠是 1.7778。
 
 ---
 
@@ -881,8 +961,8 @@ curl -i --http1.1 --max-time 3 \
    餵進那個 key 能吐出一模一樣的 accept，是驗證自己寫對了最快的方法
 2. **換成 Python 之後，這個值一個位元都沒變。** 因為那是協定規定的，
    不是任何一份實作發明的。這就是「照規格寫」的意思
-3. 你會看到棋盤是 **24×24**。因為 curl 不是瀏覽器，不會送 `resize`——
-   所以你拿到的是第 2 章講的那個「還沒被量測過」的預設棋盤
+3. 你會看到棋盤是 **48×27**。curl 沒有視窗、沒有畫面，照樣拿得到完整的棋盤——
+   因為棋盤是伺服器的，不是被瀏覽器量出來的（第 2 章）
 
 > **一般性的教訓**：換掉一個手寫實作之前，先確定你**看得懂**它在做什麼。
 > 如果你不知道 masking 是什麼，你也不會知道函式庫幫你處理掉了什麼，
@@ -1018,10 +1098,12 @@ web/
 │   ├── websocket.ts          WebSocket 客戶端
 │   ├── input.ts              鍵盤 → 指令
 │   ├── renderer.ts           Canvas 繪圖
-│   ├── palette.ts            六組色碼（第 2 章）
-│   └── board.ts              視窗尺寸 → 格子數（第 2 章）
+│   ├── palette.ts            所有色碼（第 2 章）
+│   └── board.ts              棋盤放哪裡、畫多大（第 2 章）
 │
-├── hooks/useSnakeGame.ts   ← 唯一的接縫：React ↔ socket
+├── hooks/
+│   ├── useSnakeGame.ts       唯一的接縫：React ↔ socket
+│   └── useBoardRect.ts       視窗尺寸 → 棋盤畫在哪、多大（不碰 socket）
 │
 └── components/game/        ← 純呈現，只收 props
     ├── GameCanvas.tsx
@@ -1041,7 +1123,8 @@ web/
 - 讀它的時候不用同時腦補 React 的生命週期
 
 `hooks/useSnakeGame.ts` 是唯一「翻譯層」：它管 socket 的生死、
-把伺服器狀態塞進 React state、綁鍵盤、送 `resize`。
+把伺服器狀態塞進 React state、綁鍵盤。它**完全不談尺寸**——
+畫多大是 `useBoardRect` 的事，而那件事不需要經過 socket。
 
 `components/game/` 最近多拆了三個元件，但沒有改變這條邊界：
 
@@ -1077,26 +1160,28 @@ React 會在元件消失時（或 `url` 改變時）呼叫它。
 連線洩漏，累積久了伺服器會被塞爆。
 
 「開了什麼，就要在清理函式裡關掉」是 `useEffect` 最重要的紀律。
-`useSnakeGame.ts:51` 的 resize effect 也是同樣的模式
-（`addEventListener` 配 `removeEventListener`，而且順便 `clearTimeout` 那個 debounce timer）。
+`useBoardRect` 的 `addEventListener("resize", …)` 配 `removeEventListener`、
+`bindKeyboard` 回傳自己的解綁函式，都是同一個模式——
+注意 `useEffect(() => bindKeyboard(send), [send])` 這一行：
+`bindKeyboard` 的回傳值**就是**清理函式，所以不需要多包一層。
 
-### 為什麼 resize effect 的相依是 `[connection]`
+### 重連之後，客戶端需要重新告訴伺服器什麼？
 
-```ts
-useEffect(() => {
-  if (connection !== "open") return;
-  ...
-}, [connection, send]);
-```
+答案現在是「**什麼都不用**」，但這個答案是設計出來的，不是理所當然的。
 
-不是「掛載時送一次」而是「**每次連上就送一次**」。原因是：
-斷線重連時，伺服器那邊是一個**全新的 `Game`**，回到 24×24 的預設棋盤
-（`main.py:46` 每個連線都 `game = Game()`）。
-如果只在掛載時送，重連之後盤面就會縮回一個小方塊。
+斷線重連時，伺服器那邊是一個**全新的 `Game`**（`main.py:46` 每個連線都
+`game = Game()`），分數歸零、蛇回到中央、配色回到第 0 組。
+第一版的棋盤是瀏覽器量出來的，所以重連之後那個新 `Game` 會是預設的小方塊，
+必須**每次連上就重送一次** `resize`——effect 的相依因此是 `[connection]`
+而不是「掛載時送一次」。
+
+第 2 章把棋盤改成伺服器擁有之後，這段就整個不需要了：新的 `Game` 一出生
+就是 48×27，跟舊的一模一樣。
 
 > 這是「伺服器不記得你」這個設計的直接後果。
 > 每當你決定「連線是無狀態的」，就要問一次：**重連之後，
 > 有哪些是客戶端必須重新告訴伺服器的？**
+> 而最好的答案是「沒有」——那表示你根本沒有把狀態放錯地方。
 
 ### 自動重連
 
@@ -1154,13 +1239,11 @@ Object.keys(btn).some(k => k.startsWith('__react'))   // true = 已 hydrate
 Retina 螢幕上，1 個 CSS 像素對應 2 個（甚至 3 個）實體像素。
 如果 canvas 只按 CSS 尺寸來設，畫出來的東西會被放大而模糊。
 
-`renderer.ts:67` 的處理方式：
+`renderer.ts` 的處理方式：
 
 ```ts
 const dpr = window.devicePixelRatio || 1;
 
-this.canvas.style.width  = `${boxWidth}px`;      // CSS 尺寸：版面上佔多大
-this.canvas.style.height = `${boxHeight}px`;
 this.canvas.width  = Math.round(boxWidth * dpr); // 實際像素緩衝區：畫布真正多少點
 this.canvas.height = Math.round(boxHeight * dpr);
 this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);     // 之後就能用 CSS 座標畫圖
@@ -1168,25 +1251,43 @@ this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);     // 之後就能用 CSS 座標�
 
 關鍵是分清楚兩組尺寸：
 
-| | 意義 |
-|---|---|
-| `canvas.style.width` | 在版面上顯示多大 |
-| `canvas.width` | 內部像素緩衝區有多少點 |
+| | 意義 | 誰負責 |
+|---|---|---|
+| `canvas.style.width` | 在版面上顯示多大 | **CSS**（`.board { width: 100% }`） |
+| `canvas.width` | 內部像素緩衝區有多少點 | `Renderer.resize()` |
 
 最後那行 `setTransform` 讓後續所有繪圖指令可以用 CSS 座標寫，
 瀏覽器自動乘上 dpr。不然每個座標都要手動乘。
 
-### 滿版的代價：格子邊界不是整數
+#### 踩過的坑：renderer 不可以寫 `style.width`
 
-盤面要**剛好**鋪滿視窗，所以格子大小是「視窗寬 ÷ 格數」——
-1920 ÷ 69 = 27.826…，是小數，而且跟垂直方向的 27.866… 還不完全一樣
-（格子微微不是正方形，差不到 2%，看不出來）。
+早期版本連 `canvas.style.width` 也一起設。滿版的時候看不出問題，
+但改成固定長寬比之後就炸了：**行內樣式的優先權高於 CSS 規則**，
+所以 renderer 第一次量到 1584px 並寫進行內樣式之後，
+`.board { width: 100% }` 就永遠被壓過去了——畫布被**釘死**在 1584px。
 
-問題是**小數座標會被反鋸齒**。如果直接 `fillRect(x * 27.826, ...)`，
-每個方塊的邊都落在半個像素上，瀏覽器會幫你「柔化」——
-像素風的硬邊就這樣被磨掉了。
+更惡毒的是它會自己維持這個狀態：`GameCanvas` 是靠 `canvas.clientWidth`
+判斷「盒子有沒有變」的，而那個值被行內樣式鎖成 1584，
+所以它永遠認為「沒變」，永遠不會重新配置。視窗縮小時，
+文字和按鈕（純 CSS）乖乖跟著縮，只有棋盤和蛇不動——症狀看起來像是
+「長寬比的算法錯了」，其實跟長寬比一點關係也沒有。
 
-這個計算現在抽到 `board.ts:51` 的 `cellEdges()`，因為不只 canvas 需要它：
+> **教訓**：一個元素的尺寸只能有**一個**負責人。
+> 讓 CSS 排版、讓 JS 只管像素緩衝區，這條界線一模糊，
+> 就會出現「明明改了卻沒反應」這種最難查的 bug。
+
+### 小數座標會被反鋸齒
+
+**小數座標會被反鋸齒**。如果格子大小是 27.826…（第一版滿版棋盤的情況：
+視窗寬 1920 ÷ 69 格），直接 `fillRect(x * 27.826, …)` 會讓每個方塊的邊都落在
+半個像素上，瀏覽器會幫你「柔化」——像素風的硬邊就這樣被磨掉了。
+
+現在的棋盤**先在源頭就避開小數**：`fitBoard()` 把一格無條件捨去成整數 px
+（第 2 章），所以格子是完全正方形、邊界天生落在整數上。
+
+但 `cellEdges()` 還是留著、還是四捨五入，因為畫圖的人拿到的不是那個整數，
+而是**量回來的盒子尺寸**（`canvas.clientWidth`、`getBoundingClientRect()`），
+瀏覽器有可能回你一個帶小數的值。而且不只 canvas 需要它：
 
 ```ts
 export function cellEdges(cell: number, cellSize: number): [start: number, size: number] {
@@ -1198,6 +1299,10 @@ export function cellEdges(cell: number, cellSize: number): [start: number, size:
 每一格的四個邊都四捨五入到整數像素。關鍵是**寬度是用「右邊界減左邊界」算出來的**，
 不是「格寬四捨五入」。所以第 5 格的右邊界和第 6 格的左邊界必然是同一個整數——
 兩格之間**不會有一條一像素的縫，也不會重疊**。
+
+> **兩層保險**：源頭（`fitBoard` 的 `Math.floor`）讓小數不要產生，
+> 邊界（`cellEdges` 的 `Math.round`）處理「就算真的來了小數也不會破圖」。
+> 前者是設計，後者是防禦——兩件事不衝突，也不是重複。
 
 > 如果改成 `width = Math.round(this.cellWidth)`，多數格子看起來一樣，
 > 但每隔幾格就會出現一條 1px 的背景色細縫。這種 bug 在截圖上很難發現，
@@ -1235,12 +1340,18 @@ export function cellEdges(cell: number, cellSize: number): [start: number, size:
 
 ### 另一個細節：不要每個 tick 都 resize
 
-`GameCanvas.tsx:32` 只在**視窗或棋盤真的變了**的時候才呼叫 `renderer.resize()`：
+`GameCanvas.tsx` 只在**畫布的盒子或棋盤真的變了**的時候才呼叫 `renderer.resize()`：
 
 ```ts
-if (last.width !== window.innerWidth || last.height !== window.innerHeight
+const width = canvas.clientWidth;    // CSS 已經算好了，這裡只是把答案讀回來
+const height = canvas.clientHeight;
+if (last.width !== width || last.height !== height
     || last.cols !== state.width || last.rows !== state.height) { ... }
 ```
+
+注意它**量自己**而不是量視窗：畫布鋪滿 `.stage`，而 `.stage` 多大是
+`useBoardRect` 決定的。「決定尺寸」和「照著尺寸畫」分在兩個地方，
+所以固定長寬比這件事只有一個地方在算。
 
 因為設定 `canvas.width` 會**重新配置整個像素緩衝區並清空它**。
 每秒做 8 次是純粹的浪費，而且在慢的機器上會看到閃爍。
@@ -1512,10 +1623,13 @@ Python 版沒有這個方法——測試直接寫 `game.food = (3, 0)`。這不�
 **練習**：讓 tick 隨分數縮短。注意 `_push_states` 每圈都重讀 `game.tick_seconds`，
 所以這次只要改 `Game` 就好——C++ 版那邊反而要先修 ticker 迴圈才行。
 
-### 5. 改變視窗大小會重開一局
+### 5. 棋盤永遠是 48×27
 
-第 2 章解釋過為什麼。**練習**：改成「只有變小到裝不下蛇時才重開，
-變大就直接沿用」。想想這需要在 `resize()` 裡檢查什麼。
+長寬比是釘死的（第 2 章），視窗只決定畫多大。
+**練習**：讓棋盤形狀可以選（16:9 / 4:3 / 正方形）。
+想清楚這個選擇該放在**哪一邊**——它會改變遊戲規則（能走的格子變了），
+所以照這份文件的邏輯，它屬於伺服器；那客戶端要怎麼表達這個意圖？
+（提示：`resize` 指令還在，而且還有測試。）
 
 ### 6. 配色的順序是寫死的
 

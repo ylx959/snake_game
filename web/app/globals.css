@@ -12,8 +12,16 @@
   --ink: #000000;
   --paper: #ffffff; /* 蛇經過時，字從 --ink 換成這個 */
 
-  /* One knob for the chunky border-and-drop-shadow look. */
-  --edge: 4px;
+  /* 一格有多少 px。由 page.tsx 每次量完視窗後寫進 .stage，
+     整個介面（字級、內距、間距）都是用它的倍數算出來的，
+     所以視窗一縮，棋盤和文字是「同一個比例」一起縮，不會各縮各的。
+     這裡的 28px 只是伺服器狀態還沒到之前的暫定值。 */
+  --cell: 28px;
+
+  /* One knob for the chunky border-and-drop-shadow look.
+     em = 相對於「用到它的那個元素」自己的 font-size，所以字級縮小時
+     邊框和陰影會跟著等比例變細，不會出現小字配粗框的比例失衡。 */
+  --edge: 0.45em;
 }
 
 * {
@@ -30,7 +38,9 @@ body {
 
 body {
   margin: 0;
-  background: var(--bg);
+  /* 畫面被固定比例的 .stage 佔住之後，四周會露出黑邊（letterbox）。
+     這裡先塗黑，才不會在 .stage 定位好之前閃一下底色。 */
+  background: var(--ink);
   color: var(--ink);
   /* 字型後備清單：由左往右找，第一個載得到的就用。
      var(--font-pixel) 是 next/font 產生的像素字型，載不到才退到等寬字。 */
@@ -47,17 +57,39 @@ body {
   -webkit-font-smoothing: none;
 }
 
-/* The board is the page: the canvas covers the window and the readouts float
-   on top of it, so the snake runs behind the text and the buttons. */
+/* 整個視窗。.stage 以外的地方就是黑邊，所以這一層是黑的。 */
 .screen {
   position: fixed; /* 相對於「視窗」定位，不跟著頁面捲動 */
   inset: 0; /* = top:0; right:0; bottom:0; left:0 一次寫完，等於貼滿整個視窗 */
-  background: var(--bg);
+  background: var(--ink);
 }
 
-.board {
-  position: fixed;
+/* 遊戲本體：一個固定長寬比（伺服器的 48×27，正好 16:9）的框，
+   在視窗裡放到最大並置中。left/top/width/height 由 page.tsx 量完寫成行內樣式；
+   inset: 0 是還沒量到之前的後備值（行內的 left/width 會蓋過 right，
+   因為同時給 left + width + right 是「過度指定」，瀏覽器會丟掉 right）。 */
+.stage {
+  position: absolute;
   inset: 0;
+  background: var(--bg);
+  overflow: hidden; /* 棋盤是硬邊的，超出去的東西不該露在黑邊上 */
+  /* 建立一個獨立的堆疊環境，讓下面兩層的 z-index 只跟彼此比較，
+     不會被外面的東西插隊。 */
+  isolation: isolate;
+}
+
+/* ⚠️ .board 和 .ui 的 z-index 是必要的，不是保險。
+   兩個都是 position: absolute 而沒寫 z-index 時，規格說「照 DOM 順序疊」，
+   canvas 在前所以在下面——但 canvas 每 0.12 秒重畫一次，瀏覽器很可能把它
+   丟到 GPU 的獨立圖層上，某些瀏覽器在這種情況下會讓那一層蓋住上面的 DOM。
+   症狀是「遊戲一開始跑，按鈕就不見了，一暫停又回來」。
+   寫明 z-index 之後順序就不再是推導出來的，而是指定的。 */
+.board {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
   display: block; /* canvas 預設是 inline，底下會多出一條字型行高造成的空隙 */
   /* 縮放時用「最近鄰」取樣而不是平滑內插。
      沒有這行，像素風一放大就糊掉。 */
@@ -65,16 +97,16 @@ body {
 }
 
 .ui {
-  position: fixed;
+  position: absolute;
   inset: 0;
+  z-index: 1; /* 永遠在 canvas 上面，見上面 .board 的說明 */
   display: flex;
   flex-direction: column; /* 主軸改成垂直，下面的對齊語意也跟著轉 90 度 */
   align-items: center; /* 交叉軸（此時是水平方向）置中 */
-  gap: 14px; /* 只加在「元素之間」，頭尾不會多出邊距——這是它比 margin 好用的地方 */
+  gap: calc(var(--cell) * 0.5); /* 只加在「元素之間」，頭尾不會多出邊距——這是它比 margin 好用的地方 */
   /* 三個值的 padding = 上 / 左右 / 下（四個值才是上右下左，順時針）。
-     clamp(最小值, 理想值, 最大值)：跟著視窗縮放，但不會小於 14px、不會大於 48px。
-     4vw = 視窗寬度的 4%。 */
-  padding: 18px clamp(14px, 4vw, 48px) 22px;
+     用「格」而不是 px 或 vw：留白就是幾格寬，縮放時比例完全不變。 */
+  padding: calc(var(--cell) * 0.6) var(--cell) calc(var(--cell) * 0.8);
   /* The board owns the window; only the controls take clicks back. */
   pointer-events: none; /* 滑鼠事件「穿透」這一層，直接打到底下的 canvas */
 }
@@ -97,8 +129,10 @@ body {
   /* 交叉軸：對齊文字的「基線」而不是外框。
      兩段字級不同時（這裡是 SCORE 和狀態），用 center 會看起來沒對齊。 */
   align-items: baseline;
-  gap: 40px;
-  font-size: 10px;
+  /* 字級是「格」的倍數：0.34 格 ≈ 以前在一般視窗下的 10px。
+     max(6px, …) 是下限，這個像素字型再小就糊成一團。 */
+  font-size: max(6px, calc(var(--cell) * 0.34));
+  gap: 4em; /* 用 em 而不是 40px，間距才會跟著上面的字級一起縮 */
   letter-spacing: 0.5em; /* em = 相對於自己的 font-size，字級一改間距自動跟著變 */
 }
 
@@ -110,8 +144,8 @@ body {
 /* --- the one big line, as in the reference art --------------------------- */
 
 .prompt {
-  /* 螢幕正中央。.ui 是 position: fixed，所以它就是這個絕對定位的基準，
-     而它 inset: 0 貼滿視窗，因此 50% 就是視窗正中。
+  /* 棋盤正中央。.ui 是 position: absolute，所以它就是這個絕對定位的基準，
+     而它 inset: 0 貼滿 .stage，因此 50% 就是棋盤正中（不是視窗正中）。
      transform 的 -50% 是相對「元素自己的尺寸」算的，所以不必事先知道
      這行字有多寬多高——這是水平垂直置中最可靠的寫法。 */
   position: absolute;
@@ -120,14 +154,14 @@ body {
   transform: translate(-50%, -50%);
   /* 收縮到文字實際寬度，translate(-50%) 才會以字寬為準而不是整個視窗寬。 */
   width: max-content;
-  max-width: 90vw; /* 真的塞不下時才換行，不會衝出畫面 */
+  max-width: 90%; /* 相對於 .ui（也就是棋盤）的寬度，真的塞不下才換行 */
 
   margin: 0;
-  /* clamp(最小值, 理想值, 最大值)。3.5vw 是算出來的上限：最長的那句
-     "Press an arrow to start" 是 23 個字，這個像素字型每個字約 1 個 em 寬，
-     23 × 1.06 × 3.5vw ≈ 85% 視窗寬，所以任何視窗大小都塞得下。 */
-  font-size: clamp(14px, 5vw, 55px);
-  letter-spacing: 0.06em;
+  /* 1.35 格是算出來的上限：最長的那句 "Press an arrow to start" 是 23 個字，
+     這個像素字型每個字約 1 個 em 寬，23 × 1.06 × 1.35 ≈ 33 格，
+     而棋盤有 48 格寬——所以任何視窗大小都塞得下。 */
+  font-size: max(12px, calc(var(--cell) * 1.35)); /* ≈ 1.35 格高 */
+  letter-spacing: 0.02em;
   text-align: center;
   /* 原本這裡有 min-height 撐住行高，是為了避免它消失時下面的東西往上跳。
      現在它已經脫離文件流（absolute），撐不撐都不影響別人，所以不需要了。 */
@@ -166,7 +200,17 @@ body {
   display: flex;
   flex-wrap: wrap; /* 擠不下就換行，而不是溢出視窗 */
   justify-content: center;
-  gap: 15px;
+  gap: calc(var(--cell) * 0.5); /* 按鈕之間留半格 */
+}
+
+/* 遊戲跑起來就把控制列收起來，讓畫面只剩棋盤和蛇。
+   用 visibility 而不是 display: none 或把元素從 DOM 拿掉，有兩個理由：
+   1. 按鈕必須留在 DOM 裡。Space / R 的作法是「找到那顆按鈕再按下去」
+      （lib/input.ts），元素不在就沒東西可按，也就再也回不來了。
+   2. visibility: hidden 會保留版面位置，所以按鈕回來時下面的 hint 不會跳動。
+   它同時也擋掉滑鼠事件（看不見的東西不該點得到），但 button.click() 不受影響。 */
+.controls[data-hidden] {
+  visibility: hidden;
 }
 
 .controls button {
@@ -174,15 +218,18 @@ body {
      按鈕預設「不」繼承頁面字型，沒這行就會變回系統 UI 字。
      ⚠️ 順序有意義：簡寫會把 font-size 一起重設，所以下一行的 9px 必須寫在它後面。 */
   font: inherit;
-  font-size: 9px;
+  font-size: max(6px, calc(var(--cell) * 0.31)); /* 同 .hud，以格為單位 */
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 11px 16px; /* 兩個值 = 上下 / 左右 */
+  /* 兩個值 = 上下 / 左右。改用 em（1.2em ≈ 原本的 11px、1.8em ≈ 16px），
+     所以按鈕的內距是跟著字級走的——字變小，整顆按鈕就跟著變小。 */
+  padding: 1.2em 1.8em;
   color: var(--ink);
   background:rgb(231, 231, 231); /* rgb(紅, 綠, 藍)，每個 0–255 */
   border: var(--edge) solid var(--ink); /* border: 寬度 樣式 顏色（靠型別辨認，順序可換） */
   border-radius:0; /* 明確蓋掉瀏覽器給 button 的預設圓角，維持硬邊像素感 */
-  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.6);/*box-shadow: X Y blur spread color;*/
+  /* box-shadow: X Y blur spread color; 用 em 讓影子跟著按鈕一起縮。 */
+  box-shadow: 0.55em 0.55em 0 rgba(0, 0, 0, 0.6);
   cursor: pointer;
 }
 
@@ -206,9 +253,10 @@ body {
    屬性選擇器只看「有沒有這個屬性」，值是空字串也算有。 */
 .controls button:active:not(:disabled),
 .controls button[data-pressed]:not(:disabled) {
-  /* translate(X, Y)：正值往右／往下。位移剛好等於上面陰影的偏移量，
+  /* translate(X, Y)：正值往右／往下。位移剛好等於上面陰影的偏移量
+     （同樣是 0.55em，兩邊一起縮才不會對不上），
      再把 box-shadow 拿掉，看起來就像按鈕被壓進自己的影子裡。 */
-  transform: translate(5px, 5px);
+  transform: translate(0.55em, 0.55em);
   box-shadow: none;
 }
 
@@ -221,7 +269,7 @@ body {
      所以現在生效的是 <p> 的預設上下邊距（約 1em），既不是 10px 也不是 0。
      要 10px 就寫 `10px`，要貼齊就寫 `0`。 */
   margin: 10;
-  font-size: 8px;
+  font-size: max(5px, calc(var(--cell) * 0.28)); /* 同 .hud，以格為單位 */
   letter-spacing: 0.2em;
   text-align: center;
   opacity: 1; /* 0 = 全透明，1 = 完全不透明。設成 1 等於沒作用，這行可以刪掉 */

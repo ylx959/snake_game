@@ -29,16 +29,29 @@ const KEY_TO_DIRECTION: Record<string, Direction> = {
   d: "RIGHT",
 };
 
-export function keyToDirection(key: string): Direction | null {
-  return KEY_TO_DIRECTION[key] ?? KEY_TO_DIRECTION[key.toLowerCase()] ?? null;
+/**
+ * The name this key press goes by here: `w`, `r`, `space`, `ArrowUp`.
+ *
+ * It reads `event.code` - the key's *position* on the keyboard - in preference
+ * to `event.key`, which is the character the key currently produces. The two
+ * disagree more often than you would think: an input method can hand over
+ * `"Process"` instead of the letter, a dead key can produce nothing at all, and
+ * on a non-QWERTY layout `event.key` for the key under your left middle finger
+ * is not `w`. Position is what WASD means, and it is what R and Space mean too.
+ *
+ * `event.key` stays as the fallback, for anything that reports no `code`.
+ */
+function keyName(event: KeyboardEvent): string {
+  const { code } = event;
+  if (code.startsWith("Arrow")) return code; // ArrowUp, and same as `key`
+  if (code.startsWith("Key")) return code.slice(3).toLowerCase(); // KeyR -> r
+  if (code === "Space") return "space";
+  if (code) return code;
+  return event.key === " " ? "space" : event.key.toLowerCase();
 }
 
-/**
- * The button that claims a key, or null. Space is spelled `space` rather than
- * a literal " ", which no attribute selector would survive.
- */
-function buttonFor(key: string): HTMLButtonElement | null {
-  const name = key === " " ? "space" : key.toLowerCase();
+/** The button that claims a key, or null. */
+function buttonFor(name: string): HTMLButtonElement | null {
   return document.querySelector<HTMLButtonElement>(`button[data-key="${name}"]`);
 }
 
@@ -55,16 +68,16 @@ export function bindKeyboard(
   target: Window | HTMLElement = window,
 ): () => void {
   const down = (event: Event) => {
-    const { key, repeat } = event as KeyboardEvent;
+    const name = keyName(event as KeyboardEvent);
 
-    const direction = keyToDirection(key);
+    const direction = KEY_TO_DIRECTION[name];
     if (direction) {
       event.preventDefault(); // stop arrow keys scrolling the page
       send({ type: "turn", direction });
       return;
     }
 
-    const button = buttonFor(key);
+    const button = buttonFor(name);
     if (!button) return;
 
     // Always cancel, even for a disabled button: Space is a button key, so
@@ -74,14 +87,14 @@ export function bindKeyboard(
     // is what stops it. Enter is left alone, so a focused button still answers
     // it and the controls stay reachable by keyboard alone.
     event.preventDefault();
-    if (repeat || button.disabled) return;
+    if ((event as KeyboardEvent).repeat || button.disabled) return;
 
     button.dataset.pressed = "";
     button.click();
   };
 
   const up = (event: Event) => {
-    const button = buttonFor((event as KeyboardEvent).key);
+    const button = buttonFor(keyName(event as KeyboardEvent));
     if (button) delete button.dataset.pressed;
   };
 

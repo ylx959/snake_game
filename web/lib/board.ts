@@ -1,52 +1,60 @@
 /**
- * Board geometry: how many cells the viewport is worth, and where one cell
- * lands in pixels.
+ * Board geometry: where the board sits on screen, and where one cell lands
+ * inside it.
  *
- * The board covers the whole screen, so the browser is the only thing that
- * knows its shape - it measures, and the server decides what to do with the
- * answer. Nothing here is game state; it is measurement.
+ * The board has a fixed shape - the server's `width` x `height` - so the window
+ * cannot change it. Resizing the window only changes how *big* the board is
+ * drawn; the snake, the apple and every cell scale with it by exactly the same
+ * factor. Nothing here is game state; it is measurement.
  */
 
-export interface Grid {
-  cols: number;
-  rows: number;
+export interface BoardRect {
+  /** Offset from the window's top-left, in CSS pixels. */
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  /** One cell, square, in whole CSS pixels. */
+  cell: number;
 }
 
-/** Roughly how big one cell should look, in CSS pixels. */
-const TARGET_CELL_PX = 28;
+/**
+ * The largest board of the given shape that fits the window, centred.
+ *
+ * The cell size is floored to a whole pixel, which is what keeps every cell
+ * exactly square and every edge on a pixel boundary at any window size - the
+ * remainder becomes the margin around the board rather than a fraction smeared
+ * across the cells. Both sides are the same multiple of the cell, so the
+ * board's aspect ratio is `cols:rows` exactly, whatever shape the window is.
+ */
+export function fitBoard(
+  viewWidth: number,
+  viewHeight: number,
+  cols: number,
+  rows: number,
+): BoardRect {
+  const cell = Math.max(1, Math.floor(Math.min(viewWidth / cols, viewHeight / rows)));
+  const width = cell * cols;
+  const height = cell * rows;
 
-// Mirrors MIN_DIMENSION / MAX_DIMENSION in backend/game/game.py. Clamping here
-// too is not trust - the server clamps regardless - it just keeps the client
-// from asking for something it will not get and then re-asking forever.
-const MIN_CELLS = 8;
-const MAX_CELLS = 240;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-export function gridForViewport(width: number, height: number): Grid {
   return {
-    cols: clamp(Math.round(width / TARGET_CELL_PX), MIN_CELLS, MAX_CELLS),
-    rows: clamp(Math.round(height / TARGET_CELL_PX), MIN_CELLS, MAX_CELLS),
+    left: Math.round((viewWidth - width) / 2),
+    top: Math.round((viewHeight - height) / 2),
+    width,
+    height,
+    cell,
   };
-}
-
-export function sameGrid(a: Grid, b: Grid): boolean {
-  return a.cols === b.cols && a.rows === b.rows;
 }
 
 /**
  * Where one cell starts and how wide it is, along one axis, in whole pixels.
  *
- * Cell sizes are fractional (the board divides the viewport exactly), so every
- * edge is rounded. Width comes from `next edge - this edge` rather than from
- * rounding the size: that way neighbours agree on the boundary they share, and
- * the squares butt together with no seam and no overlap.
- *
- * Both the canvas and the DOM use this. `Renderer` paints with it, and `Hint`
- * masks itself with it - a mask that rounded even one edge differently would
- * sit visibly off the snake.
+ * With a whole-pixel cell this is just multiplication, but it stays rounded on
+ * purpose: `Renderer` paints with it and `LitText` masks with it, and both read
+ * the board's *measured* size, which a browser can hand back fractionally.
+ * Width comes from `next edge - this edge` rather than from rounding the size,
+ * so neighbours agree on the boundary they share and the squares butt together
+ * with no seam and no overlap.
  */
 export function cellEdges(cell: number, cellSize: number): [start: number, size: number] {
   const start = Math.round(cell * cellSize);

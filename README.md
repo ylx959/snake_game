@@ -23,7 +23,7 @@ snake_game/
 │   │   ├── input.ts            # keys -> commands
 │   │   ├── renderer.ts         # canvas drawing
 │   │   ├── palette.ts          # the colour pairs
-│   │   └── board.ts            # viewport -> cell count
+│   │   └── board.ts            # where the board sits, and how big
 │   └── types/game.ts           # the wire contract
 │
 └── backend/                    # Python game server
@@ -47,9 +47,10 @@ That includes the colours. The server sends `palette`, an *index*; the hex
 values live in `web/lib/palette.ts`, so a colour can be retuned without
 touching the backend.
 
-The one thing the browser knows and the server does not is how big the window
-is. It measures, sends `{"type":"resize"}`, and the server decides what to do
-with the answer - which is to clamp it and start the run over.
+The board is 48x27 - exactly 16:9 - and that is the server's too. The browser
+only decides how large to draw it: the biggest 16:9 box the window will hold,
+centred, with black around it. Resizing the window scales the whole game by one
+factor; it never reshapes the board and never ends a run.
 
 `web/types/game.ts` and `Game.to_dict()` are the same contract written twice.
 Change one, change the other in the same commit.

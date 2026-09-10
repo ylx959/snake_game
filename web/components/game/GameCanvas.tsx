@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * The board, which is the whole window. Owns the canvas element and keeps it
- * matching the viewport; everything it draws comes from the server-supplied
+ * The board. Owns the canvas element and keeps its backing store matching the
+ * size it is laid out at; everything it draws comes from the server-supplied
  * `GameState`.
  *
- * It only ever *follows* the viewport. Asking the server for a board that fits
- * is `useSnakeGame`'s job, so this component never has an opinion about how
- * many cells there should be.
+ * It never decides how big it is. The canvas fills the stage, the stage is
+ * sized by `useBoardRect`, and this component simply measures the box it was
+ * given - so the fixed aspect ratio is decided in exactly one place.
  */
 
 import { useCallback, useEffect, useRef } from "react";
@@ -25,38 +25,46 @@ export function GameCanvas({ state }: { state: GameState | null }) {
   const paint = useCallback(() => {
     const state = stateRef.current;
     const renderer = rendererRef.current;
-    if (!state || !renderer) return;
+    const canvas = canvasRef.current;
+    if (!state || !renderer || !canvas) return;
+
+    // The laid-out size of the canvas box, which is the stage: CSS has already
+    // done the fitting, so this reads the answer rather than recomputing it.
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    if (width === 0 || height === 0) return;
 
     // Resizing reallocates the backing store and wipes it, so it happens only
-    // when the window or the board actually changed - not on every tick.
+    // when the box or the board actually changed - not on every tick.
     const last = sizedFor.current;
     if (
-      last.width !== window.innerWidth ||
-      last.height !== window.innerHeight ||
+      last.width !== width ||
+      last.height !== height ||
       last.cols !== state.width ||
       last.rows !== state.height
     ) {
-      sizedFor.current = {
-        width: window.innerWidth,
-        height: window.innerHeight,
-        cols: state.width,
-        rows: state.height,
-      };
-      renderer.resize(state, window.innerWidth, window.innerHeight);
+      sizedFor.current = { width, height, cols: state.width, rows: state.height };
+      renderer.resize(state, width, height);
     }
 
     renderer.draw(state);
   }, []);
 
   useEffect(() => {
-    if (!canvasRef.current) return;
-    rendererRef.current = new Renderer(canvasRef.current);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    rendererRef.current = new Renderer(canvas);
 
-    window.addEventListener("resize", paint);
+    // A ResizeObserver rather than a window listener: the canvas fills the
+    // stage, and the stage is resized by a React render, which lands *after*
+    // the window's resize event. Watching the element itself means the repaint
+    // happens when its box actually changed, whatever caused it.
+    const observer = new ResizeObserver(paint);
+    observer.observe(canvas);
     paint();
 
     return () => {
-      window.removeEventListener("resize", paint);
+      observer.disconnect();
       rendererRef.current = null;
     };
   }, [paint]);

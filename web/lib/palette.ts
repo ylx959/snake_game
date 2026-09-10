@@ -19,7 +19,9 @@ export const PALETTES: readonly Palette[] = [
   { bg: "#12B0EF", fg: "#F03A1E" },
   { bg: "#4B2BEE", fg: "#FFE93D" },
   { bg: "#FF1B5E", fg: "#3EE03E" },
-  { bg: "#7FFD3A", fg: "#FF0CBA" },
+  { bg: "#7bf53a", fg: "#FF0CBA" },
+  { bg: "#40FFAB", fg: "#FF0028"},
+  { bg: "#FFE93D", fg: "#4B2BEE" },
 ];
 
 /**
@@ -28,9 +30,9 @@ export const PALETTES: readonly Palette[] = [
  *
  * The apple was going to wear the *next* pair's foreground, as a hint at the
  * world the next bite brings. The palette will not have it: consecutive pairs
- * share a hue, so a cyan apple landed on a cyan board in three cases out of
- * five. Black is the one colour legible on all five backgrounds, and it is
- * already on the board anyway.
+ * share a hue, so a cyan apple landed on a cyan board more often than not.
+ * Black is the one colour legible on every background here, and it is already
+ * on the board anyway.
  */
 export const INK = "#000000";
 

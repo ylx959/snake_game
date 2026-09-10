@@ -11,8 +11,12 @@ from typing import Any
 from .collision import is_fatal
 from .snake import Cell, Direction, Snake
 
-DEFAULT_WIDTH = 24
-DEFAULT_HEIGHT = 24
+#: The board, and with it the shape of the screen. 48x27 is exactly 16:9, so
+#: the browser can draw it with perfectly square cells at any size; it scales
+#: the board rather than re-cutting it, which is why these are the real
+#: dimensions and not a placeholder the client overrides on connect.
+DEFAULT_WIDTH = 48
+DEFAULT_HEIGHT = 27
 
 #: Bounds on a board the browser asks for. The lower one keeps `reset()` able to
 #: lay a three-cell snake out on the row; the upper one stops a hostile client
@@ -24,7 +28,7 @@ DEFAULT_TICK_SECONDS = 0.12
 #: How many background/foreground pairs the browser cycles through. The server
 #: sends only an *index*; the hex values live in web/lib/palette.ts, so a colour
 #: can be retuned without touching or restarting the backend.
-PALETTE_COUNT = 6
+PALETTE_COUNT = 8
 
 
 class GameStatus(str, Enum):

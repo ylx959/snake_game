@@ -56,19 +56,17 @@ export class Renderer {
   }
 
   /**
-   * Size the canvas to the viewport. The board fills it exactly, so the cell
-   * size is whatever the board divides into - fractional, and very slightly
-   * non-square when the viewport does not divide evenly.
+   * Point the backing store at a box of this size.
    *
-   * That fraction never reaches the screen: `bounds()` rounds each cell's edges
-   * to whole pixels, and neighbours round the shared edge to the same integer.
-   * Squares stay hard-edged and butt together with no seam between them.
+   * It does **not** touch `style.width` / `style.height`. CSS lays the canvas
+   * out (it fills the stage), and an inline size written here would override
+   * that rule and pin the element at whatever it measured first - the board
+   * would then stay that size for ever while the window shrank around it.
+   * The element's size is CSS's; only the pixel buffer is this class's.
    */
   resize(state: GameState, boxWidth: number, boxHeight: number): void {
     const dpr = window.devicePixelRatio || 1;
 
-    this.canvas.style.width = `${boxWidth}px`;
-    this.canvas.style.height = `${boxHeight}px`;
     this.canvas.width = Math.round(boxWidth * dpr);
     this.canvas.height = Math.round(boxHeight * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

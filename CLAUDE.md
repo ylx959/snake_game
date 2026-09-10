@@ -94,12 +94,13 @@ Two places bend that rule, both deliberately:
   `palette` is the one field `Game.reset()` deliberately leaves alone — it is
   set in `__init__` and nowhere else — so restarting a run keeps the colours and
   only a new connection starts from pair 0.
-- **Board size.** The board fills the viewport, so its shape is the one piece of
-  game state only the browser knows. It measures (`web/lib/board.ts`), sends
-  `{"type":"resize", "width":…, "height":…}`, and the server clamps it to
-  `MIN_DIMENSION..MAX_DIMENSION` and calls `reset()`. Resizing therefore ends
-  the current run — the client only sends a size that actually changed, and
-  debounces window drags, so this bites only on a real resize.
+- **Board size.** The board is `DEFAULT_WIDTH` x `DEFAULT_HEIGHT` = 48x27,
+  exactly 16:9, and the server owns it like every other rule. The browser only
+  decides how *large* to draw it: `fitBoard()` in `web/lib/board.ts` returns the
+  biggest 48x27 box that fits the window, centred, and everything scales by that
+  one factor. Resizing the window therefore never touches the socket and can
+  never end a run. The `resize` command still exists in the protocol and is
+  still tested, but nothing in the client sends it any more.
 
 ### backend
 
@@ -148,32 +149,77 @@ Layered so that only one file knows about both React and the socket:
   connection status instead of game status while the socket is not open, because
   that is the thing the player can act on.
 
-The board is the page. The canvas is `position: fixed; inset: 0`, and the
-readouts and controls float on top of it with `pointer-events: none` except on
-the buttons — so the snake runs behind the text.
+**The stage is the game.** `.stage` is a 16:9 box, as large as the window
+allows, centred; the window outside it is `--ink`, so a window of any shape
+letterboxes rather than reshaping the board. The canvas fills the stage and the
+readouts and controls sit on top of it with `pointer-events: none` except on the
+buttons — so the snake runs behind the text.
 
-Two rendering details are load-bearing:
+`useBoardRect` measures the window and hands `page.tsx` the box, which also sets
+`--cell` (one cell, in px) on `.stage`. Every size in `globals.css` is a
+multiple of `--cell`, so text, buttons and padding scale with the board instead
+of with the window — one factor for the whole interface. `max(…px, …)` floors
+each one, because the pixel font turns to mush below about 6px.
 
-- The board fills the viewport exactly, so cell sizes are fractional and very
-  slightly non-square. `Renderer.bounds()` rounds every cell edge to a whole
-  pixel, and neighbours round the shared edge to the same integer — that is what
-  keeps squares hard-edged with no seam between them.
-- `GameCanvas` resizes the canvas only when the window or the board actually
+Three rendering details are load-bearing:
+
+- `fitBoard()` floors the cell to a whole pixel. That is what keeps every cell
+  exactly square and every edge on a pixel boundary at any window size; the
+  remainder becomes the margin around the board rather than a fraction smeared
+  across the cells. `cellEdges()` still rounds, because both the canvas and the
+  DOM read the board's *measured* box, which comes back fractional.
+- `GameCanvas` measures its own laid-out box (`canvas.clientWidth`), it does not
+  compute the fit. `LitText` reads `.stage`'s box for the same reason: the mask
+  and the paint must agree exactly, so there is one answer and both read it.
+  It watches the canvas with a `ResizeObserver`, not a window listener — the
+  stage is resized by a React render, which lands after the window event.
+- **`Renderer.resize()` must never write `canvas.style.width/height`.** An
+  earlier version did, and an inline size beats `.board { width: 100% }`: the
+  canvas latched at whatever it first measured, `clientWidth` kept reading that
+  stale value so nothing ever detected a change, and the board stopped scaling
+  while the CSS-sized text around it kept shrinking. CSS owns the element's
+  size; this class owns only the pixel buffer.
+- `GameCanvas` resizes the canvas only when the box or the board actually
   changed, never on a tick: resizing reallocates the backing store and wipes it.
+- `.board` and `.ui` carry explicit `z-index` (0 and 1) inside an
+  `isolation: isolate` stage. Without them the order is only *implied* by DOM
+  order, and a canvas repainting eight times a second is exactly the thing a
+  browser promotes to its own GPU layer, which can then paint over the DOM
+  above it. Defensive, not a fix for an observed bug.
 
-`lib/input.ts` calls `preventDefault()` on every key it recognises, and that is
-load-bearing for **Space**. A focused button answers Space by itself, so after
-one click on Reset the browser turned every later Space into another reset —
-exactly what the hint says Space does not do. Cancelling the keydown stops the
-button (its click fires on Space *keyup*), so Space always reaches the game.
-Enter still activates a focused button, which is what keeps the controls
-reachable from the keyboard.
+`.controls` hides itself while `status === "running"` (`data-hidden` in
+`page.tsx`) so the board is uncluttered in play; Space, R and game over bring it
+back. It uses `visibility: hidden`, and must: the buttons have to stay in the
+DOM because Space and R work by *clicking* them, and reserving their space keeps
+the hint from jumping.
 
-Two earlier attempts at this were wrong: ignoring all keys while a button had
-focus killed the arrow keys after a click, and ignoring only Space is what left
-Space bound to the last button clicked. Do not reintroduce either guard. It is
-safe here only because the page has no text fields — add one and it will need
-to opt out.
+`lib/input.ts` splits the keyboard in two. Steering (arrows / WASD) becomes a
+`ClientMessage` directly. **Space and R do not**: they find the button carrying
+the matching `data-key` (`space` on `StartPauseButton`, `r` on Reset) and click
+it, so the key and the mouse take the same path and the button is the single
+definition of the command. That is what keeps Space honest — it means whatever
+the visible label says, and it does nothing while the button is disabled. The
+button also gets `data-pressed` while the key is held, which `globals.css`
+draws exactly like `:active`.
+
+Keys are matched on `event.code` (the key's *position*), not `event.key` (the
+character it produces), with `key` only as a fallback. An input method can hand
+over `"Process"` instead of the letter — which is what made R do nothing while
+Space still worked — and on a non-QWERTY layout `key` for the WASD keys is not
+`w`/`a`/`s`/`d`.
+
+`preventDefault()` on those keys is load-bearing. A focused button answers Space
+by itself, so after one click on Reset the browser turned every later Space into
+another reset — exactly what the hint says Space does not do. Cancelling the
+keydown stops it (a button fires its click on Space *keyup*). Enter is left
+alone, so a focused button still answers it and the controls stay reachable from
+the keyboard.
+
+Two earlier attempts were wrong: ignoring all keys while a button had focus
+killed the arrow keys after a click, and ignoring only Space is what left Space
+bound to the last button clicked. Do not reintroduce either guard. Blanket
+`preventDefault()` is safe here only because the page has no text fields — add
+one and it will need to opt out.
 
 The `@/*` path alias maps to the **web root**, not `src/` — there is no `src/`.
 
