@@ -7,7 +7,7 @@
  * something this file has to reimplement with `fillText`.
  */
 
-import { cellEdges } from "@/lib/board";
+import { cellEdges, snakeCellRadius } from "@/lib/board";
 import { INK, paletteAt } from "@/lib/palette";
 import type { Cell, Direction, GameState } from "@/types/game";
 
@@ -84,7 +84,7 @@ export class Renderer {
     ctx.fillRect(0, 0, state.width * this.cellWidth, state.height * this.cellHeight);
 
     if (state.food) this.fillCell(state.food, INK, FOOD_INSET);
-    for (const cell of state.snake) this.fillCell(cell, fg, 0);
+    for (const cell of state.snake) this.fillSnakeCell(cell, fg);
     this.drawEyes(state);
   }
 
@@ -131,6 +131,16 @@ export class Renderer {
 
     this.ctx.fillStyle = color;
     this.ctx.fillRect(left + padX, top + padY, width - padX * 2, height - padY * 2);
+  }
+
+  /** A snake segment with subtle rounding shared by its DOM text mask. */
+  private fillSnakeCell(cell: Cell, color: string): void {
+    const [left, top, width, height] = this.bounds(cell);
+
+    this.ctx.fillStyle = color;
+    this.ctx.beginPath();
+    this.ctx.roundRect(left, top, width, height, snakeCellRadius(width, height));
+    this.ctx.fill();
   }
 
   /**

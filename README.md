@@ -1,4 +1,4 @@
-# Snake
+# Snake Game — retro ’90s style
 
 A server-authoritative snake game. A Python game server owns every rule and runs
 the clock; the browser draws the state it is sent and forwards key presses. The

@@ -18,6 +18,34 @@ export interface BoardRect {
   cell: number;
 }
 
+/** Corner radius shared by the painted snake and its DOM text mask. */
+export const SNAKE_CELL_RADIUS_RATIO = 0.15;
+
+/** A subtle radius based on the shorter side of a rendered snake cell. */
+export function snakeCellRadius(width: number, height: number): number {
+  return Math.min(width, height) * SNAKE_CELL_RADIUS_RATIO;
+}
+
+/** An SVG path whose circular corners match Canvas 2D's `roundRect`. */
+export function roundedRectPath(
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+  radius: number,
+): string {
+  const right = left + width;
+  const bottom = top + height;
+
+  return [
+    `M${left + radius} ${top}`,
+    `H${right - radius}A${radius} ${radius} 0 0 1 ${right} ${top + radius}`,
+    `V${bottom - radius}A${radius} ${radius} 0 0 1 ${right - radius} ${bottom}`,
+    `H${left + radius}A${radius} ${radius} 0 0 1 ${left} ${bottom - radius}`,
+    `V${top + radius}A${radius} ${radius} 0 0 1 ${left + radius} ${top}Z`,
+  ].join("");
+}
+
 /**
  * The largest board of the given shape that fits the window, centred.
  *
