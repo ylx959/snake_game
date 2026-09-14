@@ -65,24 +65,34 @@ export const PLAYER_COLORS: readonly string[] = [
  * colour, not merely a close one - and cyan under cyan at a distance below what
  * the eye can resolve at all.
  *
- * So these are deep and desaturated, and every one of them is far from all five
- * player colours in CIE Lab: the closest pair is about ΔE 60, where the eye
- * needs roughly 2 to tell two colours apart. `test/palette.test.mjs` measures
- * it rather than trusting the list, so a retuned hue that collides fails.
+ * So these are their own eight, and three things are true of every one of them.
  *
- * They are ordered so consecutive entries are far apart too (ΔE 40 at the
- * closest). A death is supposed to be *felt*, and two neighbouring browns would
- * make it look like nothing happened.
+ * **Far from all five player colours**: the closest pair is ΔE 46 in CIE Lab,
+ * where the eye needs roughly 2 to tell two colours apart at all.
+ *
+ * **Bright enough to be lit.** The spotlight is only as visible as the
+ * difference between lit ground and the same ground under 90% black, and a
+ * first attempt at this list went too dark - deep navies that were safely clear
+ * of every snake and had nothing left for the light to pick out. These sit at
+ * L 40-48, so that gap is 38-45, which is what solo gets from its own darkest
+ * pair. Dark enough, still, for white type and a white wall to read over them.
+ *
+ * **Far from each other**, in this order: consecutive entries are ΔE 64 apart
+ * at the closest. A death is supposed to be *felt*, and two neighbouring browns
+ * would make it look like nothing happened.
+ *
+ * `test/palette.test.mjs` measures all three rather than trusting the list, so
+ * a retuned hue that collides or goes dim fails the build.
  */
 export const ROOM_BACKGROUNDS: readonly string[] = [
-  "#14235A",
-  "#3B5E0E",
-  "#5C1033",
-  "#0E3B5E",
-  "#4A1260",
-  "#0E5E3B",
-  "#454055",
-  "#5E2A0E",
+  "#8A5337",
+  "#227A25",
+  "#2B6699",
+  "#996917",
+  "#006B68",
+  "#993D71",
+  "#5D6B00",
+  "#8D3D99",
 ];
 
 /**

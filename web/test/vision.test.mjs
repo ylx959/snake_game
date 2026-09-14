@@ -9,6 +9,7 @@ import {
   applyFog,
   isCellVisibleFrom,
   soloFocus,
+  veilAlphaAt,
   visionFocus,
 } from "../lib/vision.ts";
 
@@ -161,6 +162,57 @@ test("a spectator gets the whole board back", () => {
 test("a dead opponent is off the board entirely", () => {
   const fogged = applyFog(board([snake(ME, [HEAD]), snake(THEM, [], false)]), ME);
   assert.equal(themIn(fogged), undefined);
+});
+
+// --- the falloff ----------------------------------------------------------
+
+/** The veil straight out along a row, one cell at a time from the head. */
+const alongRow = (cells) => veilAlphaAt([HEAD[0] + cells, HEAD[1]], HEAD);
+
+test("the core is clear and the far board is at full dark", () => {
+  assert.equal(alongRow(0), 0);
+  assert.equal(alongRow(LIGHT_CORE_RADIUS_CELLS), 0);
+
+  assert.equal(alongRow(VEIL_OUTER_RADIUS_CELLS), MAX_VEIL_ALPHA);
+  // And it stays there rather than continuing to climb off the end.
+  assert.equal(alongRow(VEIL_OUTER_RADIUS_CELLS * 4), MAX_VEIL_ALPHA);
+});
+
+test("no focus means no veil anywhere", () => {
+  assert.equal(veilAlphaAt([47, 26], null), 0);
+});
+
+test("the fade only ever darkens, and never in a jump", () => {
+  // Every step a player can see, from the core to full dark. The old three-to-
+  // five fade climbed about 0.44 a cell and read as a ring; this one is spread
+  // over seven cells, and nothing here may jump far enough to draw a line.
+  let previous = 0;
+  let steepest = 0;
+
+  for (let cells = LIGHT_CORE_RADIUS_CELLS; cells <= VEIL_OUTER_RADIUS_CELLS; cells += 1) {
+    const alpha = alongRow(cells);
+    assert.ok(alpha >= previous, `the veil brightened between ${cells - 1} and ${cells}`);
+    steepest = Math.max(steepest, alpha - previous);
+    previous = alpha;
+  }
+
+  assert.equal(previous, MAX_VEIL_ALPHA);
+  assert.ok(steepest < 0.25, `one cell darkened by ${steepest.toFixed(2)} - that is an edge`);
+});
+
+test("the veil is round: distance decides it, not direction", () => {
+  // Same distance on the diagonal as straight out, so the shadow steps in
+  // circles rather than in a square.
+  assert.equal(alongRow(5), veilAlphaAt([HEAD[0], HEAD[1] + 5], HEAD));
+  assert.equal(alongRow(5), veilAlphaAt([HEAD[0] - 3, HEAD[1] - 4], HEAD)); // 3-4-5
+});
+
+test("the veil says nothing about what exists", () => {
+  // An opponent five cells out is drawn, and the veil over that cell is only
+  // part-way through its fade: the cull and the light are separate all the way
+  // down, so neither lands on the other's boundary.
+  const edge = alongRow(ENEMY_VISIBILITY_RADIUS_CELLS);
+  assert.ok(edge > 0 && edge < MAX_VEIL_ALPHA, `expected mid-fade, got ${edge}`);
 });
 
 // --- where the light sits -------------------------------------------------

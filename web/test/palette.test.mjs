@@ -100,6 +100,23 @@ test("room backgrounds are dark enough to carry white type and a white wall", ()
   }
 });
 
+test("room backgrounds are bright enough for the spotlight to show on them", () => {
+  // The light is only as visible as the difference between lit ground and the
+  // same ground under the veil, so a ground can be too dark to light up. Solo's
+  // dimmest pair manages about 35 and reads fine; a first pass at this list sat
+  // around 15 and the spotlight all but vanished.
+  const veiled = (hex) => {
+    const packed = Number.parseInt(hex.slice(1), 16);
+    const dim = (shift) => Math.round(((packed >> shift) & 255) * (1 - 0.9));
+    return `#${[16, 8, 0].map((s) => dim(s).toString(16).padStart(2, "0")).join("")}`;
+  };
+
+  for (const background of ROOM_BACKGROUNDS) {
+    const gap = lab(background)[0] - lab(veiled(background))[0];
+    assert.ok(gap >= 35, `${background} only lifts ${gap.toFixed(1)} out of its own shadow`);
+  }
+});
+
 test("a room's apple inverts with its ground", () => {
   // Solo is not asked: its apple is black on all eight palettes and always has
   // been, which is a decision about the art rather than about contrast. This

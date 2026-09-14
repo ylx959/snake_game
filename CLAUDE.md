@@ -286,19 +286,32 @@ Rendering details that are load-bearing:
   store still held the old picture. `Renderer.clear()` resets the transform
   before clearing: `draw` leaves a device-pixel-ratio scale on the context, and
   clearing through it would wipe only the top-left corner on a retina display.
-- **A shared board wears the palette, and `PLAYER_COLORS` was not chosen for
-  it.** The five player colours were picked against black, where luminance alone
-  separates them; the eight backgrounds cover the whole hue circle, so some pair
-  of them always collides. Concretely: palette 0's `#00D6F0` sits under player
-  1's `#22DFF5`, and 0 is where every round starts. A room only advances on a
-  death, so a five-player round reaches index 4 at most and the exact clash at
-  index 7 (`#FFE93D`, which *is* player 2's colour) is out of reach — but the
-  near ones are not. The fix, when it bites, is `web/lib/palette.ts`: retune the
-  offending background, or give rooms their own list. That file exists so a hue
-  can move without touching the backend.
+- **A room draws its backgrounds from `ROOM_BACKGROUNDS`, not from `PALETTES`.**
+  The eight solo pairs were chosen for one snake whose colour moves with them; a
+  room has five whose colours cannot move, because a colour is which player you
+  are. Reusing them put `#FFE93D` under the player already wearing `#FFE93D` —
+  the same colour, ΔE 0 — and cyan under cyan at ΔE 3.9, below what an eye can
+  resolve at all. `ROOM_BACKGROUNDS` is eight grounds that satisfy three
+  things at once, all of them measured in `test/palette.test.mjs` rather than
+  trusted: at least ΔE 40 from every player colour (the closest is 46); ΔE 40
+  apart from each other in this order (the closest is 64), because a death is
+  meant to be *felt* and two neighbouring browns would look like nothing
+  happened; and **bright enough to be lit**.
 
-  The apple is black on both boards now, for the reason it always was: black is
-  the one colour legible on all eight backgrounds.
+  That last one cost a round trip worth recording. The first version of this
+  list was deep navies and wines — safely clear of every snake, and the
+  spotlight all but disappeared on them. The light is only as visible as the
+  difference between lit ground and the same ground under 90% black: solo's
+  dimmest pair manages about 35 points of L and reads fine, those navies managed
+  15. These sit at L 40-48, so the gap is 38-45 and a room lights up the way
+  solo does. Dark enough, still, for white type and a white wall over them.
+
+  Because those grounds are dark, a room's screen keeps `data-theme="dark"`:
+  white type, a white `.boundary`, and a **white apple** — `inkOn()` inverts it
+  against the ground rather than hard-coding per mode. Solo is untouched: its
+  apple is black on all eight palettes exactly as it always has been, which is a
+  decision about the art rather than about contrast.
+
 - **A shared board draws its snakes exactly as solo does**: same hard square,
   same black eyes. Only the fill differs, and only because five snakes have to
   be told apart. A room is meant to look like the game, not like a different one.
@@ -313,51 +326,51 @@ Rendering details that are load-bearing:
   version; those are a dated record of a decision since reversed, not a
   description of the code.
 - **Two separate things: the cull decides what *exists*, the spotlight decides
-  how *bright* it is.** `lib/vision.ts` holds the first and only the first - a
-  cell is drawn or it is not, and it never returns a brightness. Mixing them is
-  what made an opponent at the edge of vision get dimmed twice, once for being
-  far away and again by the dark it was standing in.
+  how *bright* it is.** `lib/vision.ts` holds both, but they never share a
+  number. Mixing them is what made an opponent at the edge of vision get dimmed
+  twice, once for being far away and again by the dark it was standing in.
 
-  The cull is one hard edge: an opponent cell further than
-  `ENEMY_VISIBILITY_RADIUS_CELLS` (5) from your head is not drawn at all, at any
-  opacity, because a very faint snake is still a snake on a screen somebody is
-  staring at. Distances are compared squared; nothing in that file calls
-  `Math.sqrt`.
+- **Three radii, and the whole point is that they are three**
+  (`lib/vision.ts`): `LIGHT_CORE_RADIUS_CELLS` 1 is full brightness,
+  `ENEMY_VISIBILITY_RADIUS_CELLS` 5 is where an opponent stops being drawn at
+  all, and `VEIL_OUTER_RADIUS_CELLS` 8 is where the shadow reaches
+  `MAX_VEIL_ALPHA` 0.9 and stays. They used to be two — full light at 3, both
+  the darkest shadow *and* the cull at 5 — and that is exactly what drew a ring:
+  the fade had two cells to climb from nothing to almost black, so it arrived as
+  an edge, and opponents blinking out on that same circle drew a second line on
+  top of it. Now the fade is seven cells long and nothing else changes anywhere
+  along it. Widening the light can never change how far you can see a player.
 
-- **The spotlight is a real `createRadialGradient`, never a mask built out of
-  cells.** The board is a grid and the snake is hard squares, but light is not
-  square: painting the shadow cell by cell put a staircase around the circle and
-  banded the falloff, and no amount of tuning the steps fixes a staircase. The
-  radii are the only thing measured in cells, and only to turn them into pixels;
-  the circle is centred on the head cell's exact pixel centre.
-  `imageSmoothingEnabled = false` stays off for the pixel art and does not touch
-  gradients. Beyond its end circle a radial gradient keeps painting its last
-  stop, so one `fillRect` over the whole board leaves everything past the outer
-  radius at the same steady dark with no second pass.
-
-  Two of `VEIL_STOPS`' five stops are the radii doing their job rather than free
-  parameters: the shadow starts exactly at `FULL_LIGHT_RADIUS_CELLS` and reaches
-  its darkest exactly at `ENEMY_VISIBILITY_RADIUS_CELLS`, so the edge of the
-  light and the edge of what exists are the same circle. It stops at 0.88 rather
-  than 1 - a board that went absolutely black would lose the walls along with
+  0.9, not 1: a board that went absolutely black would lose the walls along with
   the snakes.
+
+- **The spotlight is drawn cell by cell, in squares.** Everything else on this
+  board lands on the cell grid, and the light is part of the picture rather than
+  a lens over it. A true `createRadialGradient` was tried and reverted — what
+  keeps squares from reading as a staircase is the *length* of the fade, not the
+  smoothness of its edge: `veilAlphaAt` samples a smoothstep over seven cells,
+  so neighbouring rings differ by a few percent and the steps disappear into the
+  pixel art. `smoothstep` is flat at both ends on purpose, so neither the start
+  nor the end of the fade leaves a line.
 
 - **Draw order is the effect.** Ground, then every snake and every eye, then the
   spotlight over all of it, then the apples painted back on top. Drawing the
   board whole *before* shadowing it is what makes your own snake fade along its
-  length instead of being exempt from the dark it lies in - the light follows
+  length instead of being exempt from the dark it lies in — the light follows
   the head alone, and the body is lit by it rather than carrying one of its own.
-  The apples are the single exception, and re-drawing them last is what makes
-  "food is never hidden" true at any distance. Nothing else is drawn after the
-  shadow — and an apple is redrawn **with its own cell of lit ground under it**,
-  because it is black and painting a black square onto the near-black far side
-  of the board is painting nothing. In the light that patch is the colour
-  already there and shows as nothing; only the far apples read as glowing.
+  Nothing but the apples is drawn after the shadow.
 
-  `soloFocus` lights **only RUNNING**. The dark is the difficulty, and difficulty
-  only applies while the game is being played: on READY you are still reading
-  the board, PAUSED you have stopped playing, and GAME_OVER is a record — a
-  record you cannot read is no record. `visionFocus` drops the light for a
+  An apple gets a **small round halo** first, then the fruit. It is drawn after
+  the shadow and it is a solid colour, so something has to lift it off the dark.
+  Re-laying its whole cell in the ground colour did that and was wrong: a square
+  of daylight with corners, reading as a tile rather than as fruit. The halo
+  fades out well inside the cell, so there is no edge to see, and inside the
+  light it is the colour already there and shows as nothing.
+
+  `soloFocus` lights **only RUNNING**. The dark is the difficulty, and
+  difficulty only applies while the game is being played: on READY you are still
+  reading the board, PAUSED you have stopped playing, and GAME_OVER is a record
+  — a record you cannot read is no record. `visionFocus` drops the light for a
   spectator for the same reason: they are out, so there is nothing left to hide
   from them.
 
