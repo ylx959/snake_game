@@ -12,6 +12,7 @@
  */
 
 import { LitText } from "@/components/game/LitText";
+import type { BoardView } from "@/lib/renderer";
 import type { ConnectionStatus, GameState, GameStatus } from "@/types/game";
 
 const PROMPT: Record<GameStatus, string> = {
@@ -24,9 +25,11 @@ const PROMPT: Record<GameStatus, string> = {
 export function Prompt({
   state,
   connection,
+  view,
 }: {
   state: GameState | null;
   connection: ConnectionStatus;
+  view: BoardView | null;
 }) {
   // A dead socket outranks anything the last state said: the board on screen is
   // already stale, and reconnecting is the only thing happening.
@@ -35,7 +38,7 @@ export function Prompt({
   return (
     <p className="prompt">
       {text && (
-        <LitText state={state}>
+        <LitText view={view}>
           {text}
           <span className="prompt__caret" aria-hidden="true" />
         </LitText>

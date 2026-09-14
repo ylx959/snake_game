@@ -101,16 +101,35 @@ def test_running_into_a_wall_ends_the_game_without_moving():
     assert all(0 <= x < 6 and 0 <= y < 6 for x, y in game.snake.cells)
 
 
+def test_food_never_lands_on_the_border():
+    # `_respawn_food` samples the interior only, so an apple is never flush
+    # against a wall - reaching one would mean steering into the wall behind it.
+    game = new_game(width=12, height=8)
+    for _ in range(50):
+        game._respawn_food()
+        assert game.food is not None
+        x, y = game.food
+        assert 0 < x < game.width - 1
+        assert 0 < y < game.height - 1
+
+
+def test_a_board_with_no_interior_has_nowhere_to_put_food():
+    game = new_game(width=9, height=1)
+    assert game.food is None
+
+
 def test_filling_the_board_ends_the_game():
-    # A 5x1 board: the snake starts three long, and two apples fill it.
-    game = new_game(width=5, height=1)
+    # A 5x3 board has exactly three interior cells, all on the middle row, and
+    # the snake already lies on two of them. One apple fills the last one.
+    game = new_game(width=5, height=3)
     game.start()
-    game.food = (3, 0)
+    assert game.snake.cells == [(2, 1), (1, 1), (0, 1)]
+    assert game.food == (3, 1)  # the only interior cell left
+
     game.tick()
-    assert game.status is GameStatus.RUNNING
-    game.tick()
-    assert game.score == 2
-    assert len(game.snake) == 5
+
+    assert game.score == 1
+    assert len(game.snake) == 4
     assert game.food is None
     assert game.status is GameStatus.GAME_OVER
 

@@ -1,16 +1,37 @@
 /*
- * Two colours and black. Everything on screen is `--bg`, `--fg` or `--ink`;
- * the page sets the first two from the palette index the server sent, so a
- * bite of the apple repaints the whole document at once.
+ * Two themes, and the difference between them is the whole point.
+ *
+ * A **solo run** wears the palette: `--bg` and `--fg` are the pair the server's
+ * `palette` index picked, and a bite of the apple repaints the document at
+ * once. That colour flip is the solo game's signature and it belongs to the
+ * solo game alone.
+ *
+ * **Everything else** - loading, the menus, a lobby, a shared board, a result -
+ * is black ground and white type. Those screens are not the game, and a menu
+ * that changed colour because of something a stranger ate in another room was
+ * never saying anything. A shared board is black for the same reason plus one
+ * more: five player colours have to be told apart, and they do that far better
+ * against one fixed ground than against eight moving ones.
+ *
+ * Both themes are the same five tokens, so no rule below is written twice.
+ * `page.tsx` picks between them with `data-theme` on `.screen`.
  */
 
 :root {
+  /* The letterbox around the stage. Always black - it is the edge of the
+     screen, not part of the picture, so it is the one colour no theme owns. */
+  --void: #000000;
+
   /* Palette 0, so server-rendered HTML paints the right colour before React
      hydrates and takes over. Kept in step with lib/palette.ts. */
   --bg: #00d6f0;
   --fg: #f5001e;
-  --ink: #000000;
+  --ink: #000000; /* 前景：文字、邊框、游標 */
   --paper: #ffffff; /* 蛇經過時，字從 --ink 換成這個 */
+  --surface: rgb(242, 242, 242); /* 按鈕的面 */
+  --shadow: rgba(0, 0, 0, 0.6); /* 按鈕和卡片的投影 */
+  --band: rgba(0, 0, 0, 0.08); /* 表格的隔行底色 */
+  --emboss: var(--fg); /* 大字的位移陰影 */
 
   /* 一格有多少 px。由 page.tsx 每次量完視窗後寫進 .stage，
      整個介面（字級、內距、間距）都是用它的倍數算出來的，
@@ -22,6 +43,23 @@
      em = 相對於「用到它的那個元素」自己的 font-size，所以字級縮小時
      邊框和陰影會跟著等比例變細，不會出現小字配粗框的比例失衡。 */
   --edge: 0.45em;
+}
+
+/* Everything that is not a solo run. Black ground, white type, and no palette
+   anywhere - the same five tokens, inverted.
+
+   ⚠️ `--void` is deliberately *not* redefined here: the letterbox stays black
+   in both themes. If it followed `--ink` it would turn white around the board. */
+.screen[data-theme="dark"] {
+  --bg: #000000;
+  --fg: #ffffff;
+  --ink: #ffffff;
+  --paper: #000000;
+  --surface: #000000;
+  --shadow: rgba(255, 255, 255, 0.3);
+  --band: rgba(255, 255, 255, 0.1);
+  /* White type with a white offset shadow is just a smear. */
+  --emboss: transparent;
 }
 
 * {
@@ -39,8 +77,9 @@ body {
 body {
   margin: 0;
   /* 畫面被固定比例的 .stage 佔住之後，四周會露出黑邊（letterbox）。
-     這裡先塗黑，才不會在 .stage 定位好之前閃一下底色。 */
-  background: var(--ink);
+     這裡先塗黑，才不會在 .stage 定位好之前閃一下底色。
+     用 --void 而不是 --ink：深色主題下 --ink 是白的，跟著它黑邊就白了。 */
+  background: var(--void);
   color: var(--ink);
   /* 字型後備清單：由左往右找，第一個載得到的就用。
      var(--font-pixel) 是 next/font 產生的像素字型，載不到才退到等寬字。 */
@@ -61,7 +100,12 @@ body {
 .screen {
   position: fixed; /* 相對於「視窗」定位，不跟著頁面捲動 */
   inset: 0; /* = top:0; right:0; bottom:0; left:0 一次寫完，等於貼滿整個視窗 */
-  background: var(--ink);
+  background: var(--void);
+  /* ⚠️ 這行是主題能生效的關鍵，不是重複宣告。
+     色彩是「繼承計算後的值」——body 已經把 color 算成黑色了，子元素繼承到的
+     是那個黑，不會因為 .screen 重新定義了 --ink 就跟著變。
+     在主題的邊界上重新寫一次 color，整棵子樹才會拿新的 --ink 重算。 */
+  color: var(--ink);
 }
 
 /* 遊戲本體：一個固定長寬比（伺服器的 48×27，正好 16:9）的框，
@@ -213,7 +257,8 @@ body {
   visibility: hidden;
 }
 
-.controls button {
+.controls button,
+.panel__actions button {
   /* font 是簡寫，一次繼承 style / variant / weight / size / line-height / family。
      按鈕預設「不」繼承頁面字型，沒這行就會變回系統 UI 字。
      ⚠️ 順序有意義：簡寫會把 font-size 一起重設，所以下一行的 9px 必須寫在它後面。 */
@@ -225,24 +270,26 @@ body {
      所以按鈕的內距是跟著字級走的——字變小，整顆按鈕就跟著變小。 */
   padding: 1.0em 1.6em;
   color: var(--ink);
-  background:rgb(242, 242, 242); /* rgb(紅, 綠, 藍)，每個 0–255 */
+  background: var(--surface); /* 淺色主題是接近白的灰，深色主題是黑 */
   border: var(--edge) solid var(--ink); /* border: 寬度 樣式 顏色（靠型別辨認，順序可換） */
   border-radius:8; /* 明確蓋掉瀏覽器給 button 的預設圓角，維持硬邊像素感 */
   /* box-shadow: X Y blur spread color; 用 em 讓影子跟著按鈕一起縮。 */
-  box-shadow: 0.55em 0.55em 0 rgba(0, 0, 0, 0.6);
+  box-shadow: 0.55em 0.55em 0 var(--shadow);
   cursor: pointer;
 }
 
 /* 遊戲結束後 start/pause 兩個指令伺服器都不會理，所以那顆按鈕會 disabled。
    沒有這條規則的話它看起來還是可以按的，玩家會一直戳。
    :disabled 的樣式要寫在 :hover 前面，不然 hover 會蓋過去。 */
-.controls button:disabled {
+.controls button:disabled,
+.panel__actions button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
   box-shadow: none; /* 影子拿掉，看起來就不像浮起來可以按 */
 }
 
-.controls button:hover:not(:disabled) {
+.controls button:hover:not(:disabled),
+.panel__actions button:hover:not(:disabled) {
   background: var(--ink);
   color: var(--bg);
 }
@@ -252,7 +299,8 @@ body {
    加在對應的按鈕上，讓鍵盤看起來跟滑鼠按下去一模一樣。
    屬性選擇器只看「有沒有這個屬性」，值是空字串也算有。 */
 .controls button:active:not(:disabled),
-.controls button[data-pressed]:not(:disabled) {
+.controls button[data-pressed]:not(:disabled),
+.panel__actions button:active:not(:disabled) {
   /* translate(X, Y)：正值往右／往下。位移剛好等於上面陰影的偏移量
      （同樣是 0.55em，兩邊一起縮才不會對不上），
      再把 box-shadow 拿掉，看起來就像按鈕被壓進自己的影子裡。 */
@@ -260,7 +308,8 @@ body {
   box-shadow: none;
 }
 
-.controls button:focus-visible{
+.controls button:focus-visible,
+.panel__actions button:focus-visible {
   outline: none;
 }
 
@@ -310,6 +359,514 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .prompt__caret,
   .hud__status[data-connection="closed"] {
+    animation: none;
+  }
+}
+
+
+/* ========================================================================== *
+ * Screens outside the board: loading, menus, lobby, results.
+ *
+ * Same two colours and the same black. Everything is sized in `--cell`, like
+ * the board and the readouts, so the whole interface still scales by the one
+ * factor - a menu at 400px wide is the same drawing as a menu at 2000px, not a
+ * different layout. `max(…px, …)` floors each size, because the pixel font
+ * turns to mush below about 6px.
+ * ========================================================================== */
+
+/* .ui lets clicks through to the canvas; anything a player types into or
+   presses has to take them back. */
+.screenful,
+.panel,
+.side {
+  pointer-events: auto;
+}
+
+/* A full-height centred column, for the screens that are only text. */
+.screenful {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--cell) * 0.7);
+  width: 100%;
+  max-width: calc(var(--cell) * 34);
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-size: max(20px, calc(var(--cell) * 2.4));
+  letter-spacing: 0.14em;
+  /* The drop shadow the buttons wear, on the one word the page is named for. */
+  text-shadow: 0.08em 0.08em 0 var(--emboss);
+}
+
+.lede {
+  margin: 0;
+  max-width: 100%;
+  font-size: max(6px, calc(var(--cell) * 0.32));
+  line-height: 1.9;
+  letter-spacing: 0.08em;
+}
+
+.lede--bad {
+  /* A refusal is white on the black-edged card: the palette's own two colours
+     are already carrying the board, so a third would fight them. */
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0.6em 0.9em;
+}
+
+/* --- the loading crawl ---------------------------------------------------- */
+
+/* Three cells running along a track, which is the same shape the real snake is
+   and is honest about what it is: decoration while a socket opens. It reports
+   no progress, because there is none to report - see LoadingScreen.tsx. */
+.crawl {
+  display: flex;
+  gap: calc(var(--cell) * 0.12);
+  margin: 0;
+}
+
+.crawl__cell {
+  width: calc(var(--cell) * 0.5);
+  height: calc(var(--cell) * 0.5);
+  border-radius: 15%;
+  background: transparent;
+  box-shadow: inset 0 0 0 max(1px, calc(var(--cell) * 0.04)) var(--ink);
+}
+
+.crawl__cell[data-on] {
+  background: var(--fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The crawl is a setInterval, so CSS cannot stop it - but the palette flip
+     and the caret are already handled above, and three small squares moving in
+     a line is the mildest thing on the page. Leave it. */
+  .crawl {
+    opacity: 0.85;
+  }
+}
+
+/* --- the card every non-board screen is made of --------------------------- */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--cell) * 0.45);
+  width: 100%;
+  max-height: 100%;
+  margin: auto 0;
+  padding: calc(var(--cell) * 0.8);
+  /* --paper, not --bg. On the dark screens the two are the same black, so
+     nothing changes there; on a solo run --bg is whatever pair the palette is
+     wearing, and a card in that colour reads as part of the board rather than
+     as a card sitting on it. White is the sheet the score is printed on. */
+  background: var(--paper);
+  border: var(--edge) solid var(--ink);
+  box-shadow: calc(var(--cell) * 0.28) calc(var(--cell) * 0.28) 0 var(--shadow);
+  /* `--edge` is an em, and these boxes have no font-size of their own, so pin
+     one: without it the border is measured against the inherited 12px. */
+  font-size: max(6px, calc(var(--cell) * 0.32));
+}
+
+/* 寬度以「格」為單位，跟畫面上其他東西同一個比例。
+   卡片寬到它的內容需要的寬度為止，不是寬到畫面允許的寬度為止。 */
+.panel[data-size="narrow"] {
+  max-width: calc(var(--cell) * 22);
+}
+
+.panel[data-size="default"] {
+  max-width: calc(var(--cell) * 26);
+}
+
+.panel[data-size="wide"] {
+  max-width: calc(var(--cell) * 34);
+}
+
+.panel__title {
+  margin: 0;
+  font-size: max(10px, calc(var(--cell) * 0.9));
+  letter-spacing: 0.1em;
+  text-align: center;
+}
+
+.panel__heading {
+  margin: calc(var(--cell) * 0.3) 0 0;
+  font-size: max(6px, calc(var(--cell) * 0.32));
+  letter-spacing: 0.16em;
+  opacity: 0.75;
+}
+
+.panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--cell) * 0.4);
+  /* The leaderboard is the one thing here that can outgrow the stage. It
+     scrolls inside the card rather than pushing the buttons off the screen. */
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: calc(var(--cell) * 0.4);
+}
+
+/* --- form fields ---------------------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--cell) * 0.2);
+  text-align: left;
+}
+
+.field__label {
+  font-size: max(5px, calc(var(--cell) * 0.28));
+  letter-spacing: 0.18em;
+  opacity: 0.75;
+}
+
+.field__input {
+  font: inherit;
+  font-size: max(8px, calc(var(--cell) * 0.55));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.5em 0.6em;
+  color: var(--ink);
+  background: var(--paper);
+  border: max(2px, calc(var(--cell) * 0.1)) solid var(--ink);
+  border-radius: 0;
+  /* iOS zooms the page in on any field whose text is under 16px; the board is
+     the page, so a zoom would break the letterboxing outright. */
+  min-height: max(44px, calc(var(--cell) * 1.6));
+  width: 100%;
+}
+
+.field__input--code {
+  text-align: center;
+  letter-spacing: 0.4em;
+  text-indent: 0.4em; /* recentres text that trailing letter-spacing pushed left */
+}
+
+.field__input:focus-visible {
+  outline: max(2px, calc(var(--cell) * 0.1)) solid var(--fg);
+  outline-offset: max(2px, calc(var(--cell) * 0.06));
+}
+
+.field__note {
+  margin: 0;
+  font-size: max(5px, calc(var(--cell) * 0.26));
+  letter-spacing: 0.12em;
+  line-height: 1.7;
+  opacity: 0.7;
+}
+
+.field__note[data-bad] {
+  opacity: 1;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0.4em 0.6em;
+}
+
+/* --- the room code, read out loud ---------------------------------------- */
+
+.code {
+  margin: 0;
+  text-align: center;
+  font-size: max(16px, calc(var(--cell) * 1.5));
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+  color: var(--ink);
+  text-shadow: 0.06em 0.06em 0 var(--emboss);
+}
+
+/* --- lists: the lobby roster, the leaderboard, the live standing ---------- */
+
+.table,
+.roster,
+.players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--cell) * 0.12);
+}
+
+.table__row,
+.roster__row,
+.players__row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--cell) * 0.35);
+  padding: calc(var(--cell) * 0.2) calc(var(--cell) * 0.25);
+  /* Every other row banded, so a long table stays readable without rules. */
+  background: var(--band);
+}
+
+.table__row[data-you],
+.players__row[data-you] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.players__row[data-dead] {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.table__rank,
+.players__rank {
+  min-width: 2.2em;
+  opacity: 0.75;
+}
+
+.table__name,
+.roster__name,
+.players__name {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  /* A nickname is twelve characters, but a narrow stage is narrower than that
+     plus a score - clip rather than wrap into a second line. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table__score,
+.players__score {
+  min-width: 3.2em;
+  text-align: right;
+}
+
+.table__when,
+.roster__state,
+.players__state {
+  min-width: 6em;
+  text-align: right;
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+/* A colour chip, always next to a name and a number - never the only way to
+   tell two players apart. */
+.swatch {
+  flex: none;
+  width: calc(var(--cell) * 0.45);
+  height: calc(var(--cell) * 0.45);
+  border: max(1px, calc(var(--cell) * 0.05)) solid var(--ink);
+}
+
+.badge {
+  flex: none;
+  font-size: 0.75em;
+  letter-spacing: 0.1em;
+  padding: 0.15em 0.4em;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.table__row[data-you] .badge,
+.players__row[data-you] .badge {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* --- during a round ------------------------------------------------------- */
+
+/* The live standing sits in the corner rather than following the snakes
+   around: five labels chasing five heads would cover the board, and on a phone
+   they would cover most of it. */
+.side {
+  position: absolute;
+  top: calc(var(--cell) * 2);
+  right: calc(var(--cell) * 0.6);
+  width: calc(var(--cell) * 9);
+  max-width: 45%;
+  font-size: max(5px, calc(var(--cell) * 0.28));
+  letter-spacing: 0.06em;
+}
+
+/* Narrow enough that a nine-cell panel is most of the width: drop the
+   right-hand columns rather than squeezing the names. */
+@media (max-width: 520px) {
+  .players__state,
+  .table__when {
+    display: none;
+  }
+
+  .side {
+    width: calc(var(--cell) * 11);
+  }
+}
+
+.countdown {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  font-size: max(40px, calc(var(--cell) * 5));
+  letter-spacing: 0.05em;
+}
+
+/* The number over a board has to sit dead centre of it, so it is taken out of
+   the flow. The one on the bare countdown screen has a caption under it and
+   must stay in the column, or the two print on top of each other. */
+.countdown--inline {
+  position: static;
+  transform: none;
+}
+
+.bigscore {
+  margin: 0;
+  text-align: center;
+  font-size: max(28px, calc(var(--cell) * 2.6));
+  letter-spacing: 0.1em;
+  text-shadow: 0.06em 0.06em 0 var(--emboss);
+}
+
+/* Buttons stacked rather than in a row, for the main menu's three choices. */
+.controls--stack {
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  max-width: calc(var(--cell) * 12);
+}
+
+/* --- RGB split on the display type --------------------------------------- */
+
+/*
+ * See components/ui/ChromaticText.tsx. One element, three colour channels: the
+ * element's own text is green, and ::before / ::after redraw it red and blue
+ * from `data-text`. They are composited with `mix-blend-mode: screen`, which is
+ * additive - the three add back to white wherever they overlap, which is the
+ * body of every glyph, and only the edges where one has slid out keep a colour.
+ * Two channels overlapping give the secondaries, so a fringe runs red or blue
+ * through yellow, magenta or cyan on its way to white.
+ *
+ * 用虛擬元素而不是三個 <span>，理由是無障礙：標題的可及名稱是從「內容」算出來
+ * 的，三份真的文字會讓它變成 "SnakeSnakeSnake"。虛擬元素的內容不在 DOM 裡。
+ *
+ * 這個效果假設底色是黑的。screen 疊在亮底上只會更亮，色邊會整個洗掉——
+ * 而它只出現在必定是黑底的畫面上（見檔案開頭的主題區塊）。
+ */
+.chroma {
+  position: relative;
+  display: inline-block;
+
+  /* 綠色通道就是這個元素自己的文字。 */
+  color: #00ff00;
+
+  /* How far the outer channels sit from the middle one.
+     ⚠️ 兩行不是重複。第二行用了 round()，瀏覽器不支援就整條被丟掉，
+     於是第一行的 2px 留下來當後備——這是 CSS 唯一的「fallback」寫法。
+     round(…, 1px) 把偏移量鎖在整數像素上，理由跟 fitBoard() 把格子取整一樣：
+     這是像素字型，半格的位移會讓邊緣糊掉，而糊掉的邊緣正是這個效果的全部。
+     0.085 格在一般視窗下約等於 2px。超過 3px 就不再像鏡頭，只像壞掉。 */
+  --split: 2px;
+  --split: max(1px, round(calc(var(--cell) * 0.085), 1px));
+
+  /* 明確建立一個混色群組，讓 screen 只跟這三個通道彼此相加，
+     而不是往外找 .ui 或 canvas 當底。跟 .board / .ui 的 z-index 同一個理由：
+     不要讓結果取決於「剛好沒有別人建立堆疊環境」。 */
+  isolation: isolate;
+}
+
+.chroma::before,
+.chroma::after {
+  /* ⚠️ 同樣是 fallback，不是重複。`/ ""` 是 CSS 規格給生成內容的「替代文字」，
+     給空字串等於告訴輔助技術跳過它；不支援的瀏覽器會丟掉那一行，
+     退回上面那行——效果照舊，只是少了那層無障礙處理。 */
+  content: attr(data-text);
+  content: attr(data-text) / "";
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: screen;
+}
+
+/*
+ * 位移拆成兩個屬性，不是為了好看，是因為同一個元素上的兩個 animation
+ * 如果 animate 同一個屬性，後面那個會整個蓋掉前面那個。
+ * `translate` 和 `transform` 是各自獨立的屬性，會依序疊加，
+ * 所以「慢慢呼吸」和「偶爾抽一下」可以同時存在。
+ * 兩個都只碰合成階段的屬性，不會觸發 layout。
+ */
+.chroma::before {
+  color: #ff0000;
+  translate: calc(var(--split) * -1) 0;
+  animation:
+    chroma-drift-left 7s ease-in-out infinite,
+    chroma-jolt 6.5s steps(1, end) infinite;
+}
+
+.chroma::after {
+  color: #0000ff;
+  translate: var(--split) 0;
+  /* 週期跟紅色互質，兩邊才不會一直同步抽動。 */
+  animation:
+    chroma-drift-right 9s ease-in-out infinite,
+    chroma-jolt 5.3s steps(1, end) infinite;
+}
+
+@keyframes chroma-drift-left {
+  0%,
+  100% {
+    translate: calc(var(--split) * -1) 0;
+  }
+  50% {
+    translate: calc(var(--split) * -2) calc(var(--split) * -0.3);
+  }
+}
+
+@keyframes chroma-drift-right {
+  0%,
+  100% {
+    translate: var(--split) 0;
+  }
+  50% {
+    translate: calc(var(--split) * 2) calc(var(--split) * 0.3);
+  }
+}
+
+/* 大部分時間是 none，只有末尾那幾個百分比會抽三下。
+   steps(1, end) 讓它是「跳格」而不是「滑過去」——跟 blink 用同一個理由。 */
+@keyframes chroma-jolt {
+  0%,
+  91% {
+    transform: none;
+  }
+  92.5% {
+    transform: translate(calc(var(--split) * 3), 0);
+  }
+  94.5% {
+    transform: translate(calc(var(--split) * -2), calc(var(--split) * -1));
+  }
+  96.5% {
+    transform: translate(calc(var(--split) * 1.5), 0);
+  }
+  98%,
+  100% {
+    transform: none;
+  }
+}
+
+/* 減少動態時只停掉位移的「變化」，不停掉效果本身：
+   色差是一張靜態的圖，不是動畫，拿掉它等於拿掉使用者沒有要求拿掉的東西。
+   基準的 translate 寫在規則裡而不是只寫在 keyframes 裡，就是為了這一刻。 */
+@media (prefers-reduced-motion: reduce) {
+  .chroma::before,
+  .chroma::after {
     animation: none;
   }
 }

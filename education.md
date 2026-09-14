@@ -164,7 +164,8 @@
 <summary>參考答案</summary>
 
 1. 不會。移動只發生在 `Game.tick()`，而 `tick()` 只被伺服器的計時任務呼叫
-   （`backend/main.py:34` 的 `_push_states`）。送訊息只會改變「下一步往哪走」。
+   （`backend/connection.py:213` 的 `_run_solo_clock`；多人模式的對應物是
+   `backend/room/clock.py:22` 的 `run_round`，一個房間一個）。送訊息只會改變「下一步往哪走」。
 2. 分數會變回伺服器記的值。因為畫面是 `state.score` 渲染出來的，
    而 `state` 每個 tick 都被伺服器覆蓋一次。
 </details>
@@ -464,8 +465,14 @@ def opposite(self) -> "Direction":
 
 | 位置 | 語言 |
 |---|---|
-| `backend/game/game.py:139` `Game.to_dict()` | Python 產生它 |
+| `backend/game/game.py:151` `Game.to_dict()` | Python 產生它 |
 | `web/types/game.ts` | TypeScript 描述它 |
+
+> 後來加了多人模式之後，同一個模式又重複了幾次：
+> `backend/game/multiplayer.py` 的 `MultiplayerGame.to_dict()`、
+> `backend/room/room.py` 的 `lobby_state()` / `results()`、
+> `backend/protocol.py` 裡所有的訊息建構函式，對面全都是 `web/types/game.ts`。
+> 規則沒有變，只是要對照的欄位變多了。
 
 **改一邊就必須同時改另一邊。** 沒有 schema、沒有 codegen、沒有任何測試會抓到不一致。
 如果你在 Python 加了一個欄位卻忘了改 TS，TypeScript 不會報錯——它只是不知道那個欄位存在。
@@ -486,7 +493,7 @@ def opposite(self) -> "Direction":
 
 算。因為它是從「吃了幾顆」推出來的，而那是伺服器的事。
 所以 `Game` 存了一個 `palette` 整數，每吃一顆 `+1` 再對 `PALETTE_COUNT` 取模
-（`backend/game/game.py:27`），然後把**這個整數**送下去。
+（`backend/game/game.py:31`），然後把**這個整數**送下去。
 
 而那幾組色碼住在 `web/lib/palette.ts`：
 
@@ -575,7 +582,7 @@ def resize(self, width: int, height: int) -> None:
 
 ### 動手做
 
-1. 打開兩個檔案並排看：`backend/game/game.py:139` 和 `web/types/game.ts`。
+1. 打開兩個檔案並排看：`backend/game/game.py:151` 和 `web/types/game.ts`。
    逐欄位對照一次，確認每個欄位兩邊都有。
 2. 玩到一半把瀏覽器視窗拉大拉小，觀察**分數和蛇都沒有變**，只有整盤等比例縮放，
    而且黑邊的厚度隨著視窗形狀改變。打開 DevTools 看 `.stage` 的 `--cell`
@@ -585,7 +592,7 @@ def resize(self, width: int, height: int) -> None:
 
 ## 第 3 章：一個 tick 裡發生什麼事
 
-這是整個遊戲的心臟，在 `backend/game/game.py:111`。
+這是整個遊戲的心臟，在 `backend/game/game.py:123`。
 
 ```python
 def tick(self) -> None:
@@ -881,7 +888,7 @@ async def play(websocket: WebSocket) -> None:
     await websocket.accept()
 ```
 
-`backend/main.py:42`。就這樣。握手、框、遮罩、ping/pong、關閉——全部是
+`backend/main.py:66`。就這樣。握手、框、遮罩、ping/pong、關閉——全部是
 FastAPI 底下的 `websockets` 函式庫在處理。
 
 **但它以前不是這樣。** C++ 版的 `WebSocketServer.cpp` 是**從零手寫的**，
@@ -1385,19 +1392,25 @@ cd backend
 
 ```
 backend/tests/
-├── conftest.py          把 backend/ 放進 sys.path
-├── test_snake.py        身體、成長、轉向緩衝
-├── test_collision.py    撞牆、撞自己
-├── test_game.py         狀態機、計分、配色、resize
-├── test_wire.py         序列化出來的形狀
-└── test_command.py      解析與套用客戶端訊息
+├── conftest.py            把 backend/ 放進 sys.path
+├── test_snake.py          身體、成長、轉向緩衝
+├── test_collision.py      撞牆、撞自己
+├── test_game.py           狀態機、計分、配色、resize
+├── test_wire.py           序列化出來的形狀
+├── test_command.py        解析與套用客戶端訊息
+├── test_multiplayer.py    同一張棋盤上的多條蛇（後來加的）
+├── test_room.py           房間代碼、大廳、房主、房間生命週期
+├── test_leaderboard.py    Solo 排行榜的儲存與排序
+└── test_protocol.py       完整的訊息契約，以及一條真的 WebSocket
 ```
 
 每個檔案開頭有一行 `pytestmark = pytest.mark.game`（諸如此類），
 marker 註冊在 `backend/pyproject.toml`。所以既可以用檔名跑，也可以用 `-m` 跑。
 
-> 這個結構是從 C++ 版的 Catch2 標籤（`[snake]` `[collision]` `[game]` `[wire]` `[command]`）
-> 一對一搬過來的。**測試的分組方式跟語言無關**——它反映的是程式碼的分模組方式。
+> 前五個是從 C++ 版的 Catch2 標籤（`[snake]` `[collision]` `[game]` `[wire]` `[command]`）
+> 一對一搬過來的；後四個是加多人模式時照同一條規則長出來的。
+> **測試的分組方式跟語言無關**——它反映的是程式碼的分模組方式，
+> 所以模組一多，分組就自動跟著多，不需要重新想一套。
 
 ### conftest.py 在做什麼
 
@@ -1485,7 +1498,7 @@ assert parse_command("not json") is None
 包括空字串、陣列、數字、缺欄位、型別錯、以及 `{"width": true}`——
 最後那個是因為**Python 的 `bool` 是 `int` 的子類別**，
 `isinstance(True, int)` 是 `True`，所以 `_is_dimension`（`command.py:49`）
-必須額外排除它。這種只有寫測試才會逼你想到的邊界，就是拆分換來的東西。
+必須額外排除它（`protocol.py` 的 `_is_int` 出於同樣理由存在）。這種只有寫測試才會逼你想到的邊界，就是拆分換來的東西。
 
 ### 「深模組」：小介面，大內涵
 

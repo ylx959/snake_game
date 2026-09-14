@@ -1,29 +1,55 @@
 """Server entrypoint.
 
-Wiring only. The rules live in `game/`, the client protocol in `game/command.py`.
-This file's job is to hand each connection its own `Game`, pump commands into
-it, and push state out at the tick rate.
+Wiring only, and less of it than there used to be. The rules live in `game/`,
+the rooms in `room/`, the client protocol in `protocol.py`, and what any one
+message means in `connection.py`. This file hands each socket a session, runs
+the two tasks a socket needs, and sweeps up.
 
-There is no lock anywhere in here. Everything runs on one event loop, so the
-ticker and the command pump never observe a half-updated `Game` - the C++
-version's `gameMutex` has no counterpart.
+There is still no lock anywhere in here. Everything runs on one event loop, so
+a room's clock and its players' command pumps never observe a half-updated
+`GameRoom` - the C++ version's `gameMutex` has no counterpart. That is also why
+a room's clock is a single task: one place in the process advances a game, so
+no player can be on a different tick from anyone else in their room.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
-from game.command import apply, parse_command
-from game.game import Game
+from connection import Connection
+from leaderboard.repository import repository_from_env
+from room.manager import RoomManager
+from room.session import PlayerSession
+from transport import QueueOutbox, pump
 
 DEFAULT_PORT = 8000
 
-app = FastAPI(title="snake game-server")
+#: How often abandoned rooms are swept up. A room also gets swept the moment
+#: its last player leaves; this catches the lobby that was opened and forgotten.
+SWEEP_SECONDS = 60.0
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Process-wide state: the rooms, the score store, and the janitor."""
+    app.state.rooms = RoomManager()
+    app.state.scores = repository_from_env()
+    janitor = asyncio.create_task(_sweep_rooms(app.state.rooms))
+    try:
+        yield
+    finally:
+        janitor.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await janitor
+        app.state.scores.close()
+
+
+app = FastAPI(title="snake game-server", lifespan=lifespan)
 
 
 @app.get("/health")
@@ -31,35 +57,39 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-async def _push_states(websocket: WebSocket, game: Game) -> None:
-    """The server-side clock. This is the only place state advances."""
+async def _sweep_rooms(rooms: RoomManager) -> None:
     while True:
-        await asyncio.sleep(game.tick_seconds)
-        game.tick()
-        await websocket.send_text(json.dumps(game.to_dict()))
+        await asyncio.sleep(SWEEP_SECONDS)
+        rooms.sweep()
 
 
 @app.websocket("/ws")
 async def play(websocket: WebSocket) -> None:
-    """One player's session: a game, a clock pushing state, a command pump."""
+    """One player's session: an outbox writer, and a command pump."""
     await websocket.accept()
-    game = Game()
-    await websocket.send_text(json.dumps(game.to_dict()))
 
-    ticker = asyncio.create_task(_push_states(websocket, game))
+    outbox = QueueOutbox()
+    session = PlayerSession(outbox=outbox)
+    handler = Connection(session, websocket.app.state.rooms, websocket.app.state.scores)
+
+    # The writer is a task of its own so that a broadcast - which happens inside
+    # a room's synchronous method - never has to await a socket, and one slow
+    # client can never hold up a room's tick.
+    writer = asyncio.create_task(pump(websocket, outbox))
+    handler.greet()
+
     try:
         while True:
-            command = parse_command(await websocket.receive_text())
-            if command is None:
-                continue  # unrecognised message: ignore it, keep the socket
-            apply(command, game)
+            await handler.handle(await websocket.receive_text())
     except WebSocketDisconnect:
         pass
     finally:
-        # Cancelling ends the clock at once rather than one tick later.
-        ticker.cancel()
+        # Idempotent, and it has to be: a socket can report its own death more
+        # than once, and `close()` may already have run.
+        await handler.close()
+        writer.cancel()
         with contextlib.suppress(asyncio.CancelledError):
-            await ticker
+            await writer
 
 
 def _port_from_environment() -> int:

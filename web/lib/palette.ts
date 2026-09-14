@@ -36,8 +36,34 @@ export const PALETTES: readonly Palette[] = [
  */
 export const INK = "#000000";
 
+/**
+ * One colour per player in a room, by the `color` index the server handed out.
+ *
+ * Five hues that stay apart from each other, but the colour is never the only
+ * cue: every snake carries a black outline so it reads against any of the eight
+ * backgrounds above, the player's own snake wears a white ring on its head, and
+ * the side panel lists everyone by name and number. Somebody who cannot tell
+ * the red from the green can still tell the snakes apart.
+ */
+export const PLAYER_COLORS: readonly string[] = [
+  "#F5001E",
+  "#22DFF5",
+  "#FFE93D",
+  "#3EE03E",
+  "#FF0CBA",
+];
+
 /** Tolerates an out-of-range index rather than rendering `undefined`. */
 export function paletteAt(index: number): Palette {
   const n = PALETTES.length;
   return PALETTES[((index % n) + n) % n];
 }
+
+/** The same tolerance for a player colour. */
+export function playerColorAt(index: number): string {
+  const n = PLAYER_COLORS.length;
+  return PLAYER_COLORS[((index % n) + n) % n];
+}
+
+/** The white the snake lights text with, and the ring on your own head. */
+export const PAPER = "#FFFFFF";

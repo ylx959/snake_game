@@ -6,14 +6,12 @@
  */
 
 import { LitText } from "@/components/game/LitText";
-import type { GameState } from "@/types/game";
+import type { BoardView } from "@/lib/renderer";
 
-const HINT = "Arrows / WASD to start · Space to pause <-> start · R to reset";
-
-export function Hint({ state }: { state: GameState | null }) {
+export function Hint({ view, children }: { view: BoardView | null; children: React.ReactNode }) {
   return (
     <p className="hint">
-      <LitText state={state}>{HINT}</LitText>
+      <LitText view={view}>{children}</LitText>
     </p>
   );
 }

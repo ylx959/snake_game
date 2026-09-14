@@ -50,6 +50,22 @@ function keyName(event: KeyboardEvent): string {
   return event.key === " " ? "space" : event.key.toLowerCase();
 }
 
+/**
+ * True while the key press belongs to something the player is typing into.
+ *
+ * This guard is load-bearing now that the site has forms. The handler below
+ * cancels Space and R unconditionally - it has to, or a focused button steals
+ * Space - and a blanket cancel over a nickname field would eat the space bar
+ * and swallow the letter R. So typing is checked first, and a key aimed at an
+ * input is left entirely alone: not steered with, not cancelled, not routed to
+ * a button.
+ */
+function isTyping(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
+}
+
 /** The button that claims a key, or null. */
 function buttonFor(name: string): HTMLButtonElement | null {
   return document.querySelector<HTMLButtonElement>(`button[data-key="${name}"]`);
@@ -68,6 +84,7 @@ export function bindKeyboard(
   target: Window | HTMLElement = window,
 ): () => void {
   const down = (event: Event) => {
+    if (isTyping(event.target)) return;
     const name = keyName(event as KeyboardEvent);
 
     const direction = KEY_TO_DIRECTION[name];
@@ -94,6 +111,7 @@ export function bindKeyboard(
   };
 
   const up = (event: Event) => {
+    if (isTyping(event.target)) return;
     const button = buttonFor(keyName(event as KeyboardEvent));
     if (button) delete button.dataset.pressed;
   };

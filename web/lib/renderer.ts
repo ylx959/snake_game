@@ -1,15 +1,25 @@
 /**
- * Canvas renderer. Stateless with respect to the game: it is handed a
- * `GameState` and draws exactly that, so it can never disagree with the server.
+ * Canvas renderer. Stateless with respect to the game: it is handed a view of
+ * server state and draws exactly that, so it can never disagree with the
+ * server.
  *
  * It draws the board and nothing else. Every piece of text - score, status,
- * prompts, buttons, the hint - is DOM, so the pixel font is a font rather than
- * something this file has to reimplement with `fillText`.
+ * prompts, buttons, the hint, the player list - is DOM, so the pixel font is a
+ * font rather than something this file has to reimplement with `fillText`.
  */
 
 import { cellEdges, snakeCellRadius } from "@/lib/board";
-import { INK, paletteAt } from "@/lib/palette";
-import type { Cell, Direction, GameState } from "@/types/game";
+import { INK, PAPER, paletteAt, playerColorAt } from "@/lib/palette";
+import type { Cell, Direction, GameState, MultiplayerState } from "@/types/game";
+
+/**
+ * What the canvas is being asked to draw. One board, two shapes of state: solo
+ * has a single snake the server already knows everything about, a room has
+ * several and a "which one is mine".
+ */
+export type BoardView =
+  | { mode: "solo"; state: GameState }
+  | { mode: "group"; state: MultiplayerState; you: string | null };
 
 /**
  * The head's eyes: two fully rounded bars that run along the way the snake is
@@ -44,6 +54,35 @@ const MIN_CELL_FOR_EYES = 10;
 /** How far the apple is inset, so it reads as an object and not a wall tile. */
 const FOOD_INSET = 0.14;
 
+/**
+ * The black edge inside every segment on a shared board, as a fraction of a
+ * cell.
+ *
+ * Solo needs none: it has one snake, and the palette pairs its colour with the
+ * background on purpose. A shared board is black - the palette is the solo
+ * game's - so the ring does not have to rescue contrast; the five player
+ * colours all read against black on their own. What it does instead is show a
+ * hairline of the black ground between segments, which is what a snake on a
+ * ninety-something handheld looked like.
+ */
+const OUTLINE_INK = 0.11;
+
+/** The ring that marks your own head, as a fraction of a cell. */
+const OWN_RING = 0.16;
+
+/** The cells of every snake in a view, for the DOM text mask to clip against. */
+export function litCells(view: BoardView | null): Cell[] {
+  if (!view) return [];
+  if (view.mode === "solo") return view.state.snake;
+  return view.state.snakes.flatMap((snake) => snake.cells);
+}
+
+/** The board's shape, in cells. */
+export function boardShape(view: BoardView | null): { cols: number; rows: number } | null {
+  if (!view) return null;
+  return { cols: view.state.width, rows: view.state.height };
+}
+
 export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private cellWidth = 0;
@@ -64,7 +103,7 @@ export class Renderer {
    * would then stay that size for ever while the window shrank around it.
    * The element's size is CSS's; only the pixel buffer is this class's.
    */
-  resize(state: GameState, boxWidth: number, boxHeight: number): void {
+  resize(cols: number, rows: number, boxWidth: number, boxHeight: number): void {
     const dpr = window.devicePixelRatio || 1;
 
     this.canvas.width = Math.round(boxWidth * dpr);
@@ -72,30 +111,71 @@ export class Renderer {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.ctx.imageSmoothingEnabled = false;
 
-    this.cellWidth = boxWidth / state.width;
-    this.cellHeight = boxHeight / state.height;
+    this.cellWidth = boxWidth / cols;
+    this.cellHeight = boxHeight / rows;
   }
 
-  draw(state: GameState): void {
+  draw(view: BoardView): void {
     const { ctx } = this;
-    const { bg, fg } = paletteAt(state.palette);
+    const { state } = view;
 
-    ctx.fillStyle = bg;
+    // A solo run wears the palette. A shared board does not - it is black, like
+    // every screen that is not the solo game, which is also what lets five
+    // player colours read the same way in every round.
+    ctx.fillStyle = view.mode === "solo" ? paletteAt(state.palette).bg : INK;
     ctx.fillRect(0, 0, state.width * this.cellWidth, state.height * this.cellHeight);
+
+    if (view.mode === "solo") this.drawSolo(view.state);
+    else this.drawGroup(view.state, view.you);
+  }
+
+  // --- solo: unchanged, and deliberately so ------------------------------
+
+  private drawSolo(state: GameState): void {
+    const { fg } = paletteAt(state.palette);
 
     if (state.food) this.fillCell(state.food, INK, FOOD_INSET);
     for (const cell of state.snake) this.fillSnakeCell(cell, fg);
-    this.drawEyes(state);
+    if (state.snake.length > 0) this.drawEyes(state.snake[0], state.direction);
   }
 
+  // --- a shared board ----------------------------------------------------
+
+  private drawGroup(state: MultiplayerState, you: string | null): void {
+    // White, not black: the apple is black on every palette because black is
+    // the one colour legible on all eight of them - and on this board black is
+    // the ground, so it inverts with it.
+    for (const cell of state.food) this.fillCell(cell, PAPER, FOOD_INSET);
+
+    // Bodies first, then every head's eyes, so a head that another snake is
+    // drawn over still shows which way it was looking.
+    for (const snake of state.snakes) {
+      if (!snake.alive) continue; // a dead snake is off the board
+      const color = playerColorAt(snake.color);
+      for (const cell of snake.cells) {
+        this.fillSnakeCell(cell, color);
+        this.outlineCell(cell, INK, OUTLINE_INK);
+      }
+    }
+
+    for (const snake of state.snakes) {
+      if (!snake.alive || snake.cells.length === 0) continue;
+      // Your own head wears a white ring. A cue that is not a colour, so it
+      // still works for a player who cannot tell the five hues apart.
+      if (snake.player_id === you) this.outlineCell(snake.cells[0], PAPER, OWN_RING);
+      this.drawEyes(snake.cells[0], snake.direction);
+    }
+  }
+
+  // --- pieces -------------------------------------------------------------
 
   /** Two black bars on the head, so you can tell which end is which. */
-  private drawEyes(state: GameState): void {
+  private drawEyes(head: Cell, direction: Direction): void {
     const { ctx } = this;
-    const [left, top, width, height] = this.bounds(state.snake[0]);
+    const [left, top, width, height] = this.bounds(head);
     if (Math.min(width, height) < MIN_CELL_FOR_EYES) return;
 
-    const { horizontal, ahead } = EYES[state.direction];
+    const { horizontal, ahead } = EYES[direction];
     const along = horizontal ? width : height;
     const across = horizontal ? height : width;
 
@@ -144,11 +224,39 @@ export class Renderer {
   }
 
   /**
+   * A line just inside a cell's edge, optionally tucked in behind another one.
+   *
+   * Inset by half the line width, because a canvas stroke straddles its path:
+   * drawn on the edge itself, half of it would land in the neighbouring cell
+   * and the outlines of two touching segments would read as one thick seam.
+   * `behind` is the thickness of a ring already drawn outside this one, so a
+   * second ring sits flush against the first rather than overlapping it.
+   */
+  private outlineCell(cell: Cell, color: string, thickness: number, behind = 0): void {
+    const [left, top, width, height] = this.bounds(cell);
+    const short = Math.min(width, height);
+    const line = Math.max(1, Math.round(short * thickness));
+    const inset = Math.max(1, Math.round(short * behind)) * (behind > 0 ? 1 : 0) + line / 2;
+
+    this.ctx.strokeStyle = color;
+    this.ctx.lineWidth = line;
+    this.ctx.beginPath();
+    this.ctx.roundRect(
+      left + inset,
+      top + inset,
+      width - line,
+      height - line,
+      Math.max(0, snakeCellRadius(width, height) - inset),
+    );
+    this.ctx.stroke();
+  }
+
+  /**
    * A cell's pixel rectangle, snapped to whole pixels on every edge.
    *
    * The rule lives in `lib/board.ts` because the DOM needs the same answer:
-   * `Hint` masks itself with these rectangles, and a mask that rounds even one
-   * edge differently from the paint would sit visibly off the snake.
+   * `LitText` masks itself with these rectangles, and a mask that rounds even
+   * one edge differently from the paint would sit visibly off the snake.
    */
   private bounds([x, y]: Cell): [number, number, number, number] {
     const [left, width] = cellEdges(x, this.cellWidth);

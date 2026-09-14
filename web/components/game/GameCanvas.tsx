@@ -2,31 +2,31 @@
 
 /**
  * The board. Owns the canvas element and keeps its backing store matching the
- * size it is laid out at; everything it draws comes from the server-supplied
- * `GameState`.
+ * size it is laid out at; everything it draws comes from server state.
  *
  * It never decides how big it is. The canvas fills the stage, the stage is
  * sized by `useBoardRect`, and this component simply measures the box it was
- * given - so the fixed aspect ratio is decided in exactly one place.
+ * given - so the fixed aspect ratio is decided in exactly one place, and the
+ * two board shapes (48x27 solo, 64x36 in a room) need no special case here.
  */
 
 import { useCallback, useEffect, useRef } from "react";
 
-import { Renderer } from "@/lib/renderer";
-import type { GameState } from "@/types/game";
+import { Renderer, boardShape, type BoardView } from "@/lib/renderer";
 
-export function GameCanvas({ state }: { state: GameState | null }) {
+export function GameCanvas({ view }: { view: BoardView | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<Renderer | null>(null);
-  const stateRef = useRef<GameState | null>(null);
+  const viewRef = useRef<BoardView | null>(null);
   // What the canvas is currently sized for, so a tick does not resize it.
   const sizedFor = useRef({ width: 0, height: 0, cols: 0, rows: 0 });
 
   const paint = useCallback(() => {
-    const state = stateRef.current;
+    const view = viewRef.current;
     const renderer = rendererRef.current;
     const canvas = canvasRef.current;
-    if (!state || !renderer || !canvas) return;
+    const shape = boardShape(view);
+    if (!view || !shape || !renderer || !canvas) return;
 
     // The laid-out size of the canvas box, which is the stage: CSS has already
     // done the fitting, so this reads the answer rather than recomputing it.
@@ -40,14 +40,14 @@ export function GameCanvas({ state }: { state: GameState | null }) {
     if (
       last.width !== width ||
       last.height !== height ||
-      last.cols !== state.width ||
-      last.rows !== state.height
+      last.cols !== shape.cols ||
+      last.rows !== shape.rows
     ) {
-      sizedFor.current = { width, height, cols: state.width, rows: state.height };
-      renderer.resize(state, width, height);
+      sizedFor.current = { width, height, cols: shape.cols, rows: shape.rows };
+      renderer.resize(shape.cols, shape.rows, width, height);
     }
 
-    renderer.draw(state);
+    renderer.draw(view);
   }, []);
 
   useEffect(() => {
@@ -70,9 +70,9 @@ export function GameCanvas({ state }: { state: GameState | null }) {
   }, [paint]);
 
   useEffect(() => {
-    stateRef.current = state;
+    viewRef.current = view;
     paint();
-  }, [state, paint]);
+  }, [view, paint]);
 
   return <canvas className="board" ref={canvasRef} aria-hidden="true" />;
 }

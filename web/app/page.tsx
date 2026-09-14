@@ -1,36 +1,73 @@
 "use client";
 
 /**
- * The game, and the whole site. Holds the socket session, paints the palette
- * the server picked onto the document, and hands state down; the server owns
- * every rule, so this component only routes data and commands.
+ * The whole site: one socket, one stage, and whichever screen the session is
+ * on. The server owns every rule, so this component only routes data and
+ * commands - it decides which screen a message means, never what a message
+ * means to the game.
  *
- * The stage is the game: a box of the server's aspect ratio, as large as the
- * window allows, centred. Everything - the canvas, the readouts, the controls -
+ * The stage is the game: a box of the board's aspect ratio, as large as the
+ * window allows, centred. Everything - the canvas, the readouts, the menus -
  * lives inside it and is measured in cells, so resizing the window scales the
- * whole thing by one factor instead of reshaping it.
+ * whole thing by one factor instead of reshaping it. Both boards are exactly
+ * 16:9 (48x27 solo, 64x36 in a room), so switching modes changes how fine the
+ * grid is and nothing about the shape of the page.
  */
 
 import { GameCanvas } from "@/components/game/GameCanvas";
-import { Hint } from "@/components/game/Hint";
-import { Prompt } from "@/components/game/Prompt";
-import { ScoreBoard } from "@/components/game/ScoreBoard";
-import { StartPauseButton } from "@/components/game/StartPauseButton";
+import { GroupGameScreen } from "@/components/screens/GroupGameScreen";
+import { LoadingScreen } from "@/components/screens/LoadingScreen";
+import { LobbyScreen } from "@/components/screens/LobbyScreen";
+import { MenuScreen } from "@/components/screens/MenuScreen";
+import { ResultsScreen } from "@/components/screens/ResultsScreen";
+import { SoloScreen } from "@/components/screens/SoloScreen";
 import { useBoardRect } from "@/hooks/useBoardRect";
-import { useSnakeGame } from "@/hooks/useSnakeGame";
+import { useGameSession } from "@/hooks/useGameSession";
 import { paletteAt } from "@/lib/palette";
+import { boardShape } from "@/lib/renderer";
+
+/** The solo board, and the shape of the page before the server has spoken. */
+const FALLBACK = { cols: 48, rows: 27 };
 
 export default function Home() {
-  const { state, connection, send } = useSnakeGame();
-  const board = useBoardRect(state);
+  const session = useGameSession();
+  const { phase, view, config } = session;
 
-  // The server sends an index; the hex lives in lib/palette.ts. Setting it as
-  // custom properties here repaints the page, the buttons and the canvas
-  // together, with no transition - the flip is meant to be abrupt.
-  const { bg, fg } = paletteAt(state?.palette ?? 0);
+  // A board if there is one; otherwise the shape the menus letterbox to. Both
+  // are 16:9, so this never changes the page's proportions - only its grid.
+  const inRoom = phase === "lobby" || phase === "countdown" || phase === "playing" || phase === "results";
+  const shape =
+    boardShape(view) ??
+    (inRoom && config
+      ? { cols: config.multi.width, rows: config.multi.height }
+      : config
+        ? { cols: config.solo.width, rows: config.solo.height }
+        : FALLBACK);
+
+  const board = useBoardRect(shape.cols, shape.rows);
+
+  // The palette belongs to a solo run and to nothing else. The server sends an
+  // index; the hex lives in lib/palette.ts. Setting it as custom properties
+  // here repaints the page, the buttons and the canvas together, with no
+  // transition - the flip is meant to be abrupt.
+  //
+  // Every other screen - loading, the menus, a lobby, a shared board, a result -
+  // takes the dark theme in globals.css: black ground, white type, no palette.
+  // The style attribute has to be dropped entirely for those, not set to some
+  // neutral pair: an inline custom property beats the stylesheet, so leaving
+  // one behind would pin the theme at whatever the last solo run was wearing.
+  const palette = paletteAt(session.solo?.palette ?? 0);
 
   return (
-    <main className="screen" style={{ "--bg": bg, "--fg": fg } as React.CSSProperties}>
+    <main
+      className="screen"
+      data-theme={phase === "solo" ? undefined : "dark"}
+      style={
+        phase === "solo"
+          ? ({ "--bg": palette.bg, "--fg": palette.fg } as React.CSSProperties)
+          : undefined
+      }
+    >
       <div
         className="stage"
         style={
@@ -49,25 +86,72 @@ export default function Home() {
             : undefined
         }
       >
-        <GameCanvas state={state} />
+        <GameCanvas view={view} />
 
         <div className="ui">
-          <ScoreBoard state={state} connection={connection} />
-          <Prompt state={state} connection={connection} />
+          {phase === "loading" && (
+            <LoadingScreen connection={session.connection} onRetry={session.reconnect} />
+          )}
 
-          <div className="ui__gap" />
+          {phase === "menu" && (
+            <MenuScreen
+              send={session.send}
+              setNickname={session.setNickname}
+              nickname={session.nickname}
+              config={session.config}
+              leaderboard={session.leaderboard}
+              error={session.error}
+              dismissError={session.dismissError}
+            />
+          )}
 
-          {/* 跑起來的時候收起來，畫面上只剩棋盤；暫停、reset、game over 才回來。
-              按鈕本身留在 DOM 裡——Space / R 是靠「按那顆按鈕」生效的。 */}
-          <footer className="controls" data-hidden={state?.status === "running" || undefined}>
-            <StartPauseButton status={state?.status ?? null} send={send} />
-            {/* data-key: R presses this button; lib/input.ts routes it here. */}
-            <button type="button" data-key="r" onClick={() => send({ type: "reset" })}>
-              Reset
-            </button>
-          </footer>
+          {phase === "solo" && (
+            <SoloScreen
+              state={session.solo}
+              view={view}
+              connection={session.connection}
+              leaderboard={session.leaderboard}
+              lastScore={session.lastScore}
+              send={session.send}
+            />
+          )}
 
-          <Hint state={state} />
+          {phase === "lobby" && session.lobby && (
+            <LobbyScreen
+              lobby={session.lobby}
+              you={session.you}
+              send={session.send}
+              error={session.error}
+            />
+          )}
+
+          {(phase === "countdown" || phase === "playing") && session.group && (
+            <GroupGameScreen
+              state={session.group}
+              view={view}
+              me={session.me}
+              you={session.you}
+              connection={session.connection}
+              countdown={session.countdown}
+            />
+          )}
+
+          {/* The countdown lands before the first board does, so it needs a
+              screen of its own for those few hundred milliseconds. */}
+          {phase === "countdown" && !session.group && (
+            <div className="screenful">
+              <p className="countdown countdown--inline">{session.countdown}</p>
+              <p className="lede">Everybody starts together</p>
+            </div>
+          )}
+
+          {phase === "results" && session.rankings && (
+            <ResultsScreen
+              rankings={session.rankings}
+              you={session.you}
+              send={session.send}
+            />
+          )}
         </div>
       </div>
     </main>

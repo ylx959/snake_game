@@ -46,9 +46,11 @@ class Snake:
         length: int = DEFAULT_LENGTH,
     ) -> None:
         x, y = start
-        # Lay the body out behind the head along -x, mirroring the starting
-        # heading of RIGHT so the snake begins fully on the board.
-        self._body: deque[Cell] = deque((x - i, y) for i in range(length))
+        # Lay the body out *behind* the head, against the heading, so a snake
+        # spawned facing any direction begins with its body trailing it rather
+        # than in front of it - which would be an instant self-collision.
+        dx, dy = direction.value
+        self._body: deque[Cell] = deque((x - dx * i, y - dy * i) for i in range(length))
         self._direction = direction
         self._pending = direction
         self._grow = 0

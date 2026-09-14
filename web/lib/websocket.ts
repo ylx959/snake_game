@@ -1,12 +1,16 @@
 /**
  * WebSocket client. Plain TypeScript, no React - React talks to it through
- * `useSnakeGame`, so the transport stays testable and framework-free.
+ * `useGameSession`, so the transport stays testable and framework-free.
+ *
+ * It knows nothing about what any message means. Every frame goes to one
+ * handler; deciding what a `lobby_state` or a `results` does to the screen is
+ * the hook's job, not the socket's.
  */
 
 import type { ClientMessage, ConnectionStatus, ServerMessage } from "@/types/game";
 
 export interface GameSocketHandlers {
-  onState?: (state: ServerMessage) => void;
+  onMessage?: (message: ServerMessage) => void;
   onStatusChange?: (status: ConnectionStatus) => void;
 }
 
@@ -32,14 +36,19 @@ export class GameSocket {
     socket.onopen = () => this.handlers.onStatusChange?.("open");
 
     socket.onmessage = (event) => {
-      const message = JSON.parse(event.data as string) as ServerMessage;
-      if (message.type === "state") this.handlers.onState?.(message);
+      let message: ServerMessage;
+      try {
+        message = JSON.parse(event.data as string) as ServerMessage;
+      } catch {
+        return; // a frame we cannot read is not worth taking the socket down for
+      }
+      this.handlers.onMessage?.(message);
     };
 
     socket.onclose = () => {
       this.handlers.onStatusChange?.("closed");
-      // The backend holds the game state, so a drop loses the run. Reconnect
-      // anyway - a fresh board beats a dead page.
+      // The backend holds the game state, so a drop loses the run and the room.
+      // Reconnect anyway - a fresh menu beats a dead page.
       if (!this.closedByUs) {
         this.reconnectTimer = setTimeout(() => this.connect(), RECONNECT_DELAY_MS);
       }
@@ -54,6 +63,7 @@ export class GameSocket {
     }
   }
 
+  /** Drop the socket and stop trying to get it back. */
   disconnect(): void {
     this.closedByUs = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);

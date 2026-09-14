@@ -14,7 +14,7 @@ const pixel = Press_Start_2P({
 
 export const metadata: Metadata = {
   title: "YLX | Snake Game",
-  description: "Server-authoritative snake: Python owns the state, the browser only draws it.",
+  description: "A 90’S RETRO TAKE ON THE CLASSIC SNAKE GAME.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

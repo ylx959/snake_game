@@ -6,6 +6,7 @@
  */
 
 import { LitText } from "@/components/game/LitText";
+import type { BoardView } from "@/lib/renderer";
 import type { ConnectionStatus, GameState } from "@/types/game";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -18,21 +19,22 @@ const STATUS_LABEL: Record<string, string> = {
 export function ScoreBoard({
   state,
   connection,
+  view,
 }: {
   state: GameState | null;
   connection: ConnectionStatus;
+  view: BoardView | null;
 }) {
   // Until the socket is open there is no game to describe, so show the
   // connection instead - it is the thing the player can actually act on.
-  const label =
-    connection === "open" ? (STATUS_LABEL[state?.status ?? ""] ?? "…") : connection;
+  const label = connection === "open" ? (STATUS_LABEL[state?.status ?? ""] ?? "…") : connection;
 
   return (
     <header className="hud">
-      <LitText state={state} className="hud__score">
+      <LitText view={view} className="hud__score">
         Score {String(state?.score ?? 0).padStart(3, "0")}
       </LitText>
-      <LitText state={state} className="hud__status" data-connection={connection}>
+      <LitText view={view} className="hud__status" data-connection={connection}>
         {label}
       </LitText>
     </header>

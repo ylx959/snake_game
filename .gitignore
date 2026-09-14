@@ -18,6 +18,11 @@
 .env.local
 .env.*.local
 
+# The development leaderboard. Real deployments point DATABASE_URL elsewhere.
+*.db
+*.db-wal
+*.db-shm
+
 # Python
 backend/.venv/
 __pycache__/

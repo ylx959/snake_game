@@ -6,4 +6,8 @@ markers = [
     "game: the tick, food, score and status",
     "wire: the serialized shape the browser receives",
     "command: parsing and applying client messages",
+    "multiplayer: several snakes on one board, resolved in lockstep",
+    "room: codes, lobbies, the host, and the room lifecycle",
+    "leaderboard: the solo high-score store",
+    "protocol: the full client/server message contract",
 ]

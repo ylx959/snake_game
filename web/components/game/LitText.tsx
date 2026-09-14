@@ -1,33 +1,35 @@
 "use client";
 
 /**
- * Text that turns white wherever the snake is behind it.
+ * Text that turns white wherever a snake is behind it.
  *
- * The snake is painted on the canvas and these readouts are DOM sitting on top
- * of it, so the canvas cannot mask them - it is underneath. Instead the line is
- * written twice: the black one you always see, and a white copy stacked exactly
- * on it whose `clip-path` is the set of cells the snake occupies. Only the
- * covered part of the white copy is ever visible.
+ * The snakes are painted on the canvas and these readouts are DOM sitting on
+ * top of it, so the canvas cannot mask them - it is underneath. Instead the
+ * line is written twice: the black one you always see, and a white copy stacked
+ * exactly on it whose `clip-path` is the set of cells the snakes occupy. Only
+ * the covered part of the white copy is ever visible.
  *
  * Purely presentational. It reads the positions the server already sent and
- * asks the game nothing: no hit test, no geometry of its own.
+ * asks the game nothing: no hit test, no geometry of its own. On a shared board
+ * it clips against every snake at once, so any of them lights the text.
  */
 
 import { useEffect, useRef, useState, type ComponentPropsWithoutRef, type RefObject } from "react";
 
 import { cellEdges, roundedRectPath, snakeCellRadius } from "@/lib/board";
-import type { GameState } from "@/types/game";
+import { boardShape, litCells, type BoardView } from "@/lib/renderer";
 
 /** A zero-area path: clips the white copy away entirely. */
 const NOTHING = "M0 0Z";
 
-/** The snake's cells as one SVG path, in the element's own coordinates. */
-function useSnakeClip(ref: RefObject<HTMLElement | null>, state: GameState | null): string {
+/** Every snake's cells as one SVG path, in the element's own coordinates. */
+function useSnakeClip(ref: RefObject<HTMLElement | null>, view: BoardView | null): string {
   const [clip, setClip] = useState(NOTHING);
 
   useEffect(() => {
     const element = ref.current;
-    if (!element || !state) {
+    const shape = boardShape(view);
+    if (!element || !shape) {
       setClip(NOTHING);
       return;
     }
@@ -46,10 +48,10 @@ function useSnakeClip(ref: RefObject<HTMLElement | null>, state: GameState | nul
     // shifts by the distance between that box and the board's.
     const box = element.getBoundingClientRect();
     const board = stage.getBoundingClientRect();
-    const cellWidth = board.width / state.width;
-    const cellHeight = board.height / state.height;
+    const cellWidth = board.width / shape.cols;
+    const cellHeight = board.height / shape.rows;
 
-    const path = state.snake
+    const path = litCells(view)
       .map(([x, y]) => {
         const [left, width] = cellEdges(x, cellWidth);
         const [top, height] = cellEdges(y, cellHeight);
@@ -64,16 +66,16 @@ function useSnakeClip(ref: RefObject<HTMLElement | null>, state: GameState | nul
       .join("");
 
     setClip(path || NOTHING);
-  }, [ref, state]);
+  }, [ref, view]);
 
   return clip;
 }
 
-type Props = ComponentPropsWithoutRef<"span"> & { state: GameState | null };
+type Props = ComponentPropsWithoutRef<"span"> & { view: BoardView | null };
 
-export function LitText({ state, children, className, ...rest }: Props) {
+export function LitText({ view, children, className, ...rest }: Props) {
   const ref = useRef<HTMLSpanElement>(null);
-  const clip = useSnakeClip(ref, state);
+  const clip = useSnakeClip(ref, view);
 
   return (
     <span {...rest} className={className ? `lit ${className}` : "lit"} ref={ref}>

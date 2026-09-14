@@ -10,9 +10,9 @@
  *
  * The mapping is the server's, in `Game.start()` / `Game.pause()`:
  *
- * - ready   -> "Start", sends `start`
- * - paused  -> "Start", sends `start` (which is also how the server resumes)
- * - running -> "Pause", sends `pause`
+ * - ready   -> "Start", sends `solo_start`
+ * - paused  -> "Start", sends `solo_start` (which is also how the server resumes)
+ * - running -> "Pause", sends `solo_pause`
  * - game over: neither command does anything, so the button is disabled.
  *   Reset is the only way on, and it has its own button.
  */
@@ -36,7 +36,7 @@ export function StartPauseButton({
       data-key="space"
       // Both labels are five characters, so the row never reflows on a toggle.
       disabled={status === "game_over"}
-      onClick={() => send({ type: running ? "pause" : "start" })}
+      onClick={() => send({ type: running ? "solo_pause" : "solo_start" })}
     >
       {running ? "Pause" : "Start"}
     </button>
