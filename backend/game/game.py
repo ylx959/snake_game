@@ -23,7 +23,7 @@ DEFAULT_HEIGHT = 27
 #: asking for a board big enough to matter.
 MIN_DIMENSION = 8
 MAX_DIMENSION = 240
-DEFAULT_TICK_SECONDS = 0.12
+DEFAULT_TICK_SECONDS = 0.10
 
 #: How many background/foreground pairs the browser cycles through. The server
 #: sends only an *index*; the hex values live in web/lib/palette.ts, so a colour

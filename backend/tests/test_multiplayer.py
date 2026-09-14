@@ -110,6 +110,11 @@ def test_a_new_game_is_counting_down_and_nothing_moves():
     assert game.ticks == 0
 
 
+def test_a_new_room_game_advances_on_a_100ms_clock():
+    game = new_game()
+    assert game.tick_seconds == 0.10
+
+
 def test_a_direction_pressed_during_the_countdown_is_held_not_played():
     game = new_game()
     head_before = game.players["p0"].snake.head

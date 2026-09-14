@@ -31,7 +31,7 @@ from .collision import hits_self, hits_wall
 from .snake import Cell, Direction, Snake
 from .spawns import MULTI_HEIGHT, MULTI_WIDTH, spawns_for
 
-DEFAULT_TICK_SECONDS = 0.12
+DEFAULT_TICK_SECONDS = 0.10
 
 #: How many apples are on the board, by player count. More snakes means more
 #: competition for the same cell, so the board gets more to go round - but not
