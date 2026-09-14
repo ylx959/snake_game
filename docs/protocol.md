@@ -63,7 +63,8 @@ produces an `error`.
 | `start_room` | - | Host only, two players or more. |
 | `play_again` | - | From the results, back to the same lobby. |
 | `turn` | `direction` | `UP` / `DOWN` / `LEFT` / `RIGHT`. Works in both modes. |
-| `solo_start` | - | Start or resume a solo game, creating one if needed. |
+| `solo_enter` | `nickname?` | Open the solo board. Comes back READY - it does **not** start the game. |
+| `solo_start` | - | Start, or resume from a pause. The Start button, and Space. |
 | `solo_pause` | - | One key, so the server decides pause or resume. |
 | `solo_reset` | - | Start the run over. |
 | `solo_exit` | - | Drop the solo game and go back to the menu. |
@@ -72,10 +73,21 @@ produces an `error`.
 
 Where a command takes `nickname?`, the name is claimed first and the command
 then runs; omitting it uses the session's current name, and having none is
-`nickname_required`.
+`nickname_required`. The menus always send it this way rather than through
+`set_nickname`, so a refusal stops the command instead of racing it.
+
+A name is refused with `nickname_reserved` when it is already in the **visible
+top ten** of the leaderboard - including for the player who put it there. The
+check folds case and is made fresh on every claim.
 
 **There is no message that carries a score.** The only way into the leaderboard
-is finishing a game this server ran.
+is finishing a game this server ran - and a run that scored **0** is not written
+down at all (`MIN_RECORDED_SCORE`). The player is still told what they scored;
+the table just does not keep it.
+
+`solo_enter` opens the board without starting it, because the opening pause is
+part of the game: the snake stands in the middle under the prompt until the
+player's first arrow key. `solo_start` is the Start button.
 
 ## Server -> client
 
@@ -115,7 +127,8 @@ what else is on it - ever reaches a client.
 
 ```text
 already_started      bad_code             nickname_blocked     nickname_invalid
-nickname_required    nickname_taken       nickname_too_long    nickname_too_short
+nickname_required    nickname_reserved    nickname_taken       nickname_too_long
+nickname_too_short
 not_enough_players   not_host             not_in_room          rate_limited
 room_full            room_in_progress     room_not_found       room_unavailable
 ```

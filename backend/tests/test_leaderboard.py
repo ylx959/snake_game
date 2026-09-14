@@ -8,7 +8,9 @@ import pytest
 
 from leaderboard.repository import (
     MAX_SCORE,
+    MIN_RECORDED_SCORE,
     TOP_LIMIT,
+    TOP_VISIBLE,
     SqliteLeaderboardRepository,
     repository_from_env,
 )
@@ -55,7 +57,7 @@ def test_the_same_nickname_may_appear_more_than_once(store):
 def test_every_run_is_kept_not_just_a_player_best(store):
     # The table is a list of runs. Nothing here is keyed by name, because a
     # nickname is not an identity.
-    for index in range(5):
+    for index in range(1, 6):
         store.record("ylx", index, achieved_at=100.0 + index)
     assert len(store.top()) == 5
 
@@ -80,7 +82,7 @@ def test_a_nonsense_limit_yields_nothing_rather_than_everything(store, limit):
 
 
 def test_an_over_large_limit_is_clamped(store):
-    for index in range(5):
+    for index in range(1, 6):
         store.record(f"P{index}", index)
     assert len(store.top(10_000)) == 5
 
@@ -112,15 +114,51 @@ def test_a_quote_in_a_nickname_is_stored_literally_not_executed(store):
     assert store.record("ylx", 1) is True  # the table is still there
 
 
-def test_zero_is_a_real_score(store):
-    assert store.record("ylx", 0) is True
-    assert store.top()[0].score == 0
+def test_a_run_that_ate_nothing_is_not_recorded(store):
+    # The commonest way to leave the board, and it says nothing about anyone.
+    assert store.record("ylx", 0) is False
+    assert store.top() == []
+
+
+def test_one_apple_is_enough_to_be_recorded(store):
+    assert MIN_RECORDED_SCORE == 1
+    assert store.record("ylx", 1) is True
+    assert store.top()[0].score == 1
 
 
 def test_clearing_empties_the_table(store):
     store.record("ylx", 5)
     store.clear()
     assert store.top() == []
+
+
+# --- names that are spoken for -------------------------------------------
+
+
+def test_an_empty_table_reserves_nothing(store):
+    assert store.reserved_nicknames() == set()
+
+
+def test_the_visible_top_ten_are_reserved(store):
+    for index in range(TOP_VISIBLE):
+        store.record(f"P{index}", 100 - index, achieved_at=100.0)
+    assert store.reserved_nicknames() == {f"p{index}" for index in range(TOP_VISIBLE)}
+
+
+def test_names_below_the_visible_top_ten_are_not(store):
+    for index in range(TOP_VISIBLE):
+        store.record(f"P{index}", 100 - index, achieved_at=100.0)
+    store.record("Eleventh", 1, achieved_at=100.0)
+    assert "eleventh" not in store.reserved_nicknames()
+
+
+def test_reserved_names_come_back_case_folded(store):
+    store.record("MiXeD", 5, achieved_at=100.0)
+    assert store.reserved_nicknames() == {"mixed"}
+
+
+def test_the_visible_top_is_ten(store):
+    assert TOP_VISIBLE == 10
 
 
 # --- configuration --------------------------------------------------------

@@ -98,6 +98,23 @@ class Solo:
 
 
 @dataclass(frozen=True)
+class SoloEnter:
+    """Open the solo board, claiming a nickname on the way in.
+
+    It **does not start the game**. The board comes back READY, with the snake
+    standing in the middle and the prompt over it, exactly as it always has -
+    the run begins when the player steers, or presses Start.
+
+    It carries the name for the same reason `create_room` does: the score at the
+    end of this run is going on a public table, so the server has to have
+    accepted the name *before* the run exists, not raced a separate message
+    against it.
+    """
+
+    nickname: str | None
+
+
+@dataclass(frozen=True)
 class SoloExit:
     pass
 
@@ -117,6 +134,7 @@ ClientCommand = (
     | PlayAgain
     | Turn
     | Solo
+    | SoloEnter
     | SoloExit
     | GetLeaderboard
 )
@@ -179,6 +197,8 @@ def parse(text: str) -> ClientCommand | None:
             direction = direction_from_name(_text(message.get("direction")) or "")
             return Turn(direction) if direction is not None else None
 
+        case "solo_enter":
+            return SoloEnter(_text(message.get("nickname")))
         case "solo_start":
             return Solo(Start())
         case "solo_pause":
@@ -222,6 +242,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "nickname_blocked": "Pick a different nickname",
     "nickname_invalid": "Pick a different nickname",
     "nickname_required": "Pick a nickname first",
+    "nickname_reserved": "That name is on the leaderboard - pick another",
     "nickname_taken": "Somebody in this room has that nickname",
     "nickname_too_long": f"Nickname can be at most {MAX_NICKNAME} characters",
     "nickname_too_short": f"Nickname needs at least {MIN_NICKNAME} characters",

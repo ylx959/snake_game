@@ -31,9 +31,22 @@ from room.nickname import MAX_NICKNAME, clean_nickname
 #: The full table the API will return. The main screen shows the top ten of it.
 TOP_LIMIT = 100
 
+#: How much of the table is on screen, and so how much of it is spoken for:
+#: a name in the top ten cannot be played under by anybody else. The rule is
+#: tied to what a player can actually see, because the point of it is that
+#: nobody can appear to be one of the names on the board.
+TOP_VISIBLE = 10
+
 #: Nothing sane reaches this; it is a guard against a stored value that could
 #: only have come from a bug.
 MAX_SCORE = 1_000_000
+
+#: The lowest score worth keeping. A run that ate nothing is a run that did not
+#: happen - it says nothing about the player, it is the commonest way to leave
+#: the board, and a table of them buries the scores that mean something. The
+#: run still finishes, is still shown to the player, and still costs them their
+#: name; it simply is not written down.
+MIN_RECORDED_SCORE = 1
 
 DEFAULT_DATABASE_URL = "sqlite:///./leaderboard.db"
 
@@ -63,6 +76,8 @@ class LeaderboardRepository(Protocol):
     def record(self, nickname: str, score: int, achieved_at: float | None = None) -> bool: ...
 
     def top(self, limit: int = TOP_LIMIT) -> list[LeaderboardEntry]: ...
+
+    def reserved_nicknames(self, limit: int = TOP_VISIBLE) -> set[str]: ...
 
     def clear(self) -> None: ...
 
@@ -124,14 +139,15 @@ class SqliteLeaderboardRepository:
 
         Validated rather than trusted, even though the only caller is the
         server's own game-over path: a store that assumes its caller is careful
-        is not a boundary.
+        is not a boundary. A scoreless run is refused here too - see
+        `MIN_RECORDED_SCORE`.
         """
         cleaned = clean_nickname(nickname)
         if cleaned.nickname is None:
             return False
         if not isinstance(score, int) or isinstance(score, bool):
             return False
-        if not 0 <= score <= MAX_SCORE:
+        if not MIN_RECORDED_SCORE <= score <= MAX_SCORE:
             return False
 
         with self._connection:
@@ -154,6 +170,16 @@ class SqliteLeaderboardRepository:
             (limit,),
         ).fetchall()
         return _rank(rows)
+
+    def reserved_nicknames(self, limit: int = TOP_VISIBLE) -> set[str]:
+        """The names nobody else may play under, case-folded for comparison.
+
+        Case-folded rather than lower-cased: `str.lower()` is a display
+        transform, `str.casefold()` is the one meant for "are these the same
+        word", and the difference is the whole point of a check that exists to
+        stop one player looking like another.
+        """
+        return {entry.nickname.casefold() for entry in self.top(limit)}
 
     def clear(self) -> None:
         with self._connection:

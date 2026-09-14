@@ -129,12 +129,22 @@ container's disk looks exactly like a working one until it restarts.
 ### Solo
 
 Pick a nickname, look at the top ten, and play. The rules are the ones the game
-has always had: arrows or WASD steer and start, Space pauses and resumes, R
-resets, an apple grows you by one and flips the palette.
+has always had: the snake waits in the middle until your first arrow key, arrows
+or WASD steer and start, Space pauses and resumes, R resets, and an apple grows
+you by one and flips the palette.
 
 When the run ends, **the server** writes the score. There is no client message
 that carries a score, so there is nothing for a browser to inflate; one finished
 run writes exactly one row. Ties are broken by who got there first.
+
+A run that ate nothing is not recorded: it is the commonest way to leave the
+board and says nothing about anyone. You are still told what you scored.
+
+A name in the visible top ten is spoken for: nobody else can play under it, so
+nobody can appear to be one of the names on the board. The check folds case and
+is made fresh on every claim, because the table moves. It applies in rooms too,
+and it applies to the holder as well - getting into the top ten retires that
+name.
 
 ### Group
 
@@ -144,11 +154,14 @@ be read off somebody else's screen. Up to five play; two is the minimum; the
 first one in is the host and only the host can start.
 
 After a synchronised `3 · 2 · 1`, every snake starts at once on one 64x36 board.
-Each player gets a colour the server hands out. The board is black: the palette
-cycling belongs to a solo run, and one fixed ground is what lets five player
-colours be told apart the same way in every round. Your own snake wears a white
-ring on its head, and the corner roster numbers and names everyone, so telling
-the snakes apart never depends on telling the colours apart.
+Each player gets a colour the server hands out. The board is black, with a white
+frame marking the walls: the palette cycling belongs to a solo run, and one
+fixed ground is what lets five player colours be told apart the same way in
+every round. The snakes are drawn exactly as solo draws its own - same rounded
+segments, same eyes - so a room looks like the game rather than like a different
+one. Your own carries a small name tag on its head, and the corner roster
+numbers and names everyone, so telling the snakes apart never depends on telling
+the colours apart.
 
 ```text
 Wall, or your own body            you die

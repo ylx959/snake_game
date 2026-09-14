@@ -16,14 +16,13 @@ import { ChromaticText } from "@/components/ui/ChromaticText";
 import { CodeField, CODE_LENGTH } from "@/components/ui/CodeField";
 import { NicknameField } from "@/components/ui/NicknameField";
 import { Panel } from "@/components/ui/Panel";
-import { cleanNickname, nicknameProblem, rememberedNickname } from "@/lib/nickname";
+import { cleanNickname, nicknameProblem, rememberNickname, rememberedNickname } from "@/lib/nickname";
 import type { ClientMessage, LeaderboardEntry, ServerConfig } from "@/types/game";
 
 type View = "home" | "solo" | "create" | "join";
 
 export function MenuScreen({
   send,
-  setNickname,
   nickname,
   config,
   leaderboard,
@@ -31,7 +30,6 @@ export function MenuScreen({
   dismissError,
 }: {
   send: (message: ClientMessage) => void;
-  setNickname: (nickname: string) => void;
   nickname: string | null;
   config: ServerConfig | null;
   leaderboard: LeaderboardEntry[] | null;
@@ -63,7 +61,23 @@ export function MenuScreen({
     setView(next);
   };
 
-  const claim = () => setNickname(cleanNickname(draft));
+  /**
+   * The cleaned name, remembered for next time.
+   *
+   * It is not claimed with a message of its own: every screen that needs a name
+   * sends it *with* the command it belongs to, so the server settles the name
+   * and the command together. A separate `set_nickname` raced against the
+   * command that followed it, and a refusal - the name is on the leaderboard,
+   * say - arrived too late to stop it.
+   *
+   * Remembering is local convenience only; the server neither sees nor trusts
+   * what is in `localStorage`.
+   */
+  const claim = () => {
+    const nickname = cleanNickname(draft);
+    rememberNickname(nickname);
+    return nickname;
+  };
 
   if (view === "home") {
     return (
@@ -71,7 +85,7 @@ export function MenuScreen({
         <h1 className="title">
           <ChromaticText>Snake</ChromaticText>
         </h1>
-        <p className="lede">A Python server owns every rule. Your browser only draws it.</p>
+        <p className="lede">A 90’S RETRO TAKE ON THE CLASSIC SNAKE GAME.</p>
         <div className="controls controls--stack">
           <button type="button" onClick={() => go("solo")}>
             Solo
@@ -101,10 +115,7 @@ export function MenuScreen({
             <button
               type="button"
               disabled={!named}
-              onClick={() => {
-                claim();
-                send({ type: "solo_start" });
-              }}
+              onClick={() => send({ type: "solo_enter", nickname: claim() })}
             >
               Play
             </button>
@@ -131,7 +142,7 @@ export function MenuScreen({
             <button
               type="button"
               disabled={!named}
-              onClick={() => send({ type: "create_room", nickname: cleanNickname(draft) })}
+              onClick={() => send({ type: "create_room", nickname: claim() })}
             >
               Create
             </button>
@@ -159,9 +170,7 @@ export function MenuScreen({
           <button
             type="button"
             disabled={!named || code.length !== CODE_LENGTH}
-            onClick={() =>
-              send({ type: "join_room", code, nickname: cleanNickname(draft) })
-            }
+            onClick={() => send({ type: "join_room", code, nickname: claim() })}
           >
             Join
           </button>

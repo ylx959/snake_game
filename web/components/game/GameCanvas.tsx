@@ -25,8 +25,19 @@ export function GameCanvas({ view }: { view: BoardView | null }) {
     const view = viewRef.current;
     const renderer = rendererRef.current;
     const canvas = canvasRef.current;
+    if (!renderer || !canvas) return;
+
+    // No board to draw - the menus, a lobby, a loading screen. Wipe it rather
+    // than returning: a canvas holds its last frame, so leaving a round left
+    // the room's snakes sitting behind the menu. `sizedFor` is reset with it so
+    // the next board reallocates the backing store instead of trusting a size
+    // that belongs to a game that is over.
     const shape = boardShape(view);
-    if (!view || !shape || !renderer || !canvas) return;
+    if (!view || !shape) {
+      renderer.clear();
+      sizedFor.current = { width: 0, height: 0, cols: 0, rows: 0 };
+      return;
+    }
 
     // The laid-out size of the canvas box, which is the stage: CSS has already
     // done the fitting, so this reads the answer rather than recomputing it.

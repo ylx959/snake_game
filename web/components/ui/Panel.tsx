@@ -18,19 +18,31 @@ import type { ReactNode } from "react";
  */
 export type PanelSize = "narrow" | "default" | "wide";
 
+/**
+ * Which way round the card is.
+ *
+ * "paper" is the default and follows the screen: white on a solo run, black on
+ * the dark screens. "ink" is always black with white type, whatever is behind
+ * it - for a card that has to be dark for its contents' sake rather than for
+ * the screen's.
+ */
+export type PanelTone = "paper" | "ink";
+
 export function Panel({
   title,
   children,
   footer,
   size = "default",
+  tone = "paper",
 }: {
   title?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   size?: PanelSize;
+  tone?: PanelTone;
 }) {
   return (
-    <section className="panel" data-size={size}>
+    <section className="panel" data-size={size} data-tone={tone}>
       {title && <h1 className="panel__title">{title}</h1>}
       <div className="panel__body">{children}</div>
       {footer && <div className="panel__actions">{footer}</div>}

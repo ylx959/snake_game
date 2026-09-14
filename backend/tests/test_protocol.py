@@ -42,6 +42,8 @@ pytestmark = pytest.mark.protocol
         ('{"type":"start_room"}', protocol.StartRoom()),
         ('{"type":"play_again"}', protocol.PlayAgain()),
         ('{"type":"turn","direction":"LEFT"}', protocol.Turn(Direction.LEFT)),
+        ('{"type":"solo_enter"}', protocol.SoloEnter(None)),
+        ('{"type":"solo_enter","nickname":"ylx"}', protocol.SoloEnter("ylx")),
         ('{"type":"solo_start"}', protocol.Solo(Start())),
         ('{"type":"solo_pause"}', protocol.Solo(Pause())),
         ('{"type":"solo_reset"}', protocol.Solo(Reset())),
@@ -465,7 +467,7 @@ def test_a_resize_does_not_start_a_solo_game(harness):
 def test_a_resize_reaches_a_running_solo_game(harness):
     async def scenario():
         handler = harness.connect("YLX")
-        await send(handler, type="solo_start")
+        await send(handler, type="solo_enter")
         await send(handler, type="resize", width=56, height=24)
         assert (handler.solo.width, handler.solo.height) == (56, 24)
         await handler.close()
@@ -473,20 +475,140 @@ def test_a_resize_reaches_a_running_solo_game(harness):
     asyncio.run(scenario())
 
 
+# --- names on the leaderboard are spoken for -----------------------------
+
+
+def test_a_name_in_the_visible_top_ten_cannot_be_played_under(harness):
+    harness.scores.record("Champion", 99, achieved_at=100.0)
+
+    handler = harness.connect()
+    asyncio.run(send(handler, type="set_nickname", nickname="champion"))
+
+    # Case does not rescue it: the check is what stops one player looking like
+    # another, so it folds case the way a reader does.
+    assert last(handler, "error")["code"] == "nickname_reserved"
+    assert handler.session.nickname is None
+
+
+def test_a_name_below_the_visible_top_ten_is_free(harness):
+    for index in range(10):
+        harness.scores.record(f"TOP{index}", 100 - index, achieved_at=100.0)
+    harness.scores.record("Eleventh", 1, achieved_at=100.0)
+
+    handler = harness.connect()
+    asyncio.run(send(handler, type="set_nickname", nickname="Eleventh"))
+
+    assert handler.session.nickname == "Eleventh"
+
+
+def test_a_reserved_name_cannot_open_a_room_either(harness):
+    harness.scores.record("Champion", 99, achieved_at=100.0)
+
+    handler = harness.connect()
+    asyncio.run(send(handler, type="create_room", nickname="CHAMPION"))
+
+    assert last(handler, "error")["code"] == "nickname_reserved"
+    assert harness.rooms.codes == []
+
+
+def test_a_reserved_name_cannot_join_a_room_either(harness):
+    host = harness.connect("HOST")
+    asyncio.run(send(host, type="create_room"))
+    code = last(host, "room_created")["code"]
+    harness.scores.record("Champion", 99, achieved_at=100.0)
+
+    guest = harness.connect()
+    asyncio.run(send(guest, type="join_room", code=code, nickname="Champion"))
+
+    assert last(guest, "error")["code"] == "nickname_reserved"
+    # Nothing was broadcast, because nothing happened: the room still holds one.
+    assert len(harness.rooms.get(code).players) == 1
+    assert "player_joined" not in types(host)
+
+
+def test_a_reserved_name_cannot_start_a_solo_run(harness):
+    """The name is settled before the run exists, not raced against it."""
+    harness.scores.record("Champion", 99, achieved_at=100.0)
+
+    handler = harness.connect()
+    asyncio.run(send(handler, type="solo_enter", nickname="Champion"))
+
+    assert last(handler, "error")["code"] == "nickname_reserved"
+    assert handler.solo is None
+
+
+def test_entering_solo_claims_the_name_it_carries(harness):
+    async def scenario():
+        handler = harness.connect()
+        await send(handler, type="solo_enter", nickname="  ylx  ")
+        assert handler.session.nickname == "ylx"
+        await handler.close()
+
+    asyncio.run(scenario())
+
+
+def test_a_name_becomes_reserved_as_soon_as_it_reaches_the_table(harness):
+    handler = harness.connect()
+    asyncio.run(send(handler, type="set_nickname", nickname="Rival"))
+    assert handler.session.nickname == "Rival"
+
+    harness.scores.record("Rival", 50, achieved_at=100.0)
+
+    other = harness.connect()
+    asyncio.run(send(other, type="set_nickname", nickname="Rival"))
+    assert last(other, "error")["code"] == "nickname_reserved"
+
+
 def test_solo_needs_a_nickname_so_a_score_has_somewhere_to_go(harness):
     handler = harness.connect()
-    asyncio.run(send(handler, type="solo_start"))
+    asyncio.run(send(handler, type="solo_enter"))
     assert last(handler, "error")["code"] == "nickname_required"
     assert handler.solo is None
 
 
-def test_solo_start_hands_back_a_running_board(harness):
+def test_entering_solo_hands_back_a_board_standing_still(harness):
+    """The opening pause: the snake waits in the middle until the player moves."""
+
     async def scenario():
         handler = harness.connect("YLX")
-        await send(handler, type="solo_start")
+        await send(handler, type="solo_enter")
+
         state = last(handler, "state")
-        assert state["status"] == "running"
+        assert state["status"] == "ready"
         assert state["width"] == 48 and state["height"] == 27
+        assert state["snake"][0] == [24, 13]  # dead centre
+        assert state["score"] == 0
+
+        # And it stays there: the clock is running, the game is not.
+        await asyncio.sleep(0.4)
+        assert handler.solo.status is GameStatus.READY
+        assert handler.solo.snake.head == (24, 13)
+        await handler.close()
+
+    asyncio.run(scenario())
+
+
+def test_the_first_arrow_is_what_starts_a_solo_run(harness):
+    async def scenario():
+        handler = harness.connect("YLX")
+        await send(handler, type="solo_enter")
+        assert handler.solo.status is GameStatus.READY
+
+        await send(handler, type="turn", direction="UP")
+
+        assert handler.solo.status is GameStatus.RUNNING
+        await handler.close()
+
+    asyncio.run(scenario())
+
+
+def test_the_start_button_also_starts_a_solo_run(harness):
+    async def scenario():
+        handler = harness.connect("YLX")
+        await send(handler, type="solo_enter")
+        await send(handler, type="solo_start")
+
+        assert handler.solo.status is GameStatus.RUNNING
         await handler.close()
 
     asyncio.run(scenario())
@@ -495,6 +617,7 @@ def test_solo_start_hands_back_a_running_board(harness):
 def test_a_finished_solo_run_is_written_to_the_leaderboard_by_the_server(harness):
     async def scenario():
         handler = harness.connect("YLX")
+        await send(handler, type="solo_enter")
         await send(handler, type="solo_start")
         # Steer into the wall rather than waiting out a full board.
         handler.solo.score = 7
@@ -514,13 +637,35 @@ def test_a_finished_solo_run_is_written_to_the_leaderboard_by_the_server(harness
 def test_one_run_writes_one_row(harness):
     async def scenario():
         handler = harness.connect("YLX")
+        await send(handler, type="solo_enter")
         await send(handler, type="solo_start")
+        handler.solo.score = 3
         handler.solo.snake._body[0] = (47, 13)
         await asyncio.sleep(0.5)  # several ticks past the death
         await handler.close()
         return harness.scores.top()
 
     assert len(asyncio.run(scenario())) == 1
+
+
+def test_a_run_that_ate_nothing_leaves_no_row(harness):
+    """It still ends, is still shown to the player, and is still not written."""
+
+    async def scenario():
+        handler = harness.connect("YLX")
+        await send(handler, type="solo_enter")
+        await send(handler, type="solo_start")
+        handler.solo.snake._body[0] = (47, 13)
+        await asyncio.sleep(0.4)
+
+        assert handler.solo.status is GameStatus.GAME_OVER
+        # The player is still told what they scored, and still shown the table.
+        table = last(handler, "leaderboard")
+        assert table["last_score"] == 0
+        assert table["entries"] == []
+        await handler.close()
+
+    asyncio.run(scenario())
 
 
 def test_there_is_no_client_message_that_carries_a_score():

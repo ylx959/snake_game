@@ -39,11 +39,13 @@ export const INK = "#000000";
 /**
  * One colour per player in a room, by the `color` index the server handed out.
  *
- * Five hues that stay apart from each other, but the colour is never the only
- * cue: every snake carries a black outline so it reads against any of the eight
- * backgrounds above, the player's own snake wears a white ring on its head, and
- * the side panel lists everyone by name and number. Somebody who cannot tell
- * the red from the green can still tell the snakes apart.
+ * Chosen for a **black board**, so all five are bright: against black,
+ * luminance is what makes a colour visible at all, and hue is what tells the
+ * five apart.
+ *
+ * Colour is never the only cue. Your own snake carries a name tag on its head,
+ * and the roster in the corner numbers and names everyone, so a player who
+ * cannot separate the red from the green still can.
  */
 export const PLAYER_COLORS: readonly string[] = [
   "#F5001E",

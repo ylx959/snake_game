@@ -19,7 +19,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { bindKeyboard } from "@/lib/input";
-import { rememberNickname } from "@/lib/nickname";
 import type { BoardView } from "@/lib/renderer";
 import { GameSocket } from "@/lib/websocket";
 import type {
@@ -104,6 +103,8 @@ function reduce(state: SessionState, message: ServerMessage): SessionState {
         lobby: null,
         countdown: null,
         rankings: null,
+        // Whatever went wrong belonged to the room being left.
+        error: null,
       };
 
     case "nickname_set":
@@ -196,14 +197,6 @@ export function useGameSession(url: string = DEFAULT_URL) {
     setState((current) => (current.error === null ? current : { ...current, error: null }));
   }, []);
 
-  const setNickname = useCallback(
-    (nickname: string) => {
-      rememberNickname(nickname);
-      send({ type: "set_nickname", nickname });
-    },
-    [send],
-  );
-
   // Steering goes through the same path in both modes; the server decides
   // whether a turn from this player counts, and refuses a spectator's.
   useEffect(() => bindKeyboard(send), [send]);
@@ -211,10 +204,10 @@ export function useGameSession(url: string = DEFAULT_URL) {
   const view: BoardView | null = useMemo(() => {
     if (state.phase === "solo" && state.solo) return { mode: "solo", state: state.solo };
     if (state.group && (state.phase === "playing" || state.phase === "results")) {
-      return { mode: "group", state: state.group, you: state.you };
+      return { mode: "group", state: state.group };
     }
     return null;
-  }, [state.phase, state.solo, state.group, state.you]);
+  }, [state.phase, state.solo, state.group]);
 
   /** Your own snake on a shared board, or null in solo and in the menus. */
   const me = useMemo(
@@ -222,5 +215,5 @@ export function useGameSession(url: string = DEFAULT_URL) {
     [state.group, state.you],
   );
 
-  return { ...state, view, me, send, setNickname, reconnect, dismissError };
+  return { ...state, view, me, send, reconnect, dismissError };
 }

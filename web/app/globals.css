@@ -46,7 +46,7 @@
 }
 
 /* Everything that is not a solo run. Black ground, white type, and no palette
-   anywhere - the same five tokens, inverted.
+   anywhere - the same tokens, inverted.
 
    ⚠️ `--void` is deliberately *not* redefined here: the letterbox stays black
    in both themes. If it followed `--ink` it would turn white around the board. */
@@ -406,7 +406,7 @@ body {
 .lede {
   margin: 0;
   max-width: 100%;
-  font-size: max(6px, calc(var(--cell) * 0.32));
+  font-size: max(8px, calc(var(--cell) * 0.38));
   line-height: 1.9;
   letter-spacing: 0.08em;
 }
@@ -466,11 +466,32 @@ body {
      wearing, and a card in that colour reads as part of the board rather than
      as a card sitting on it. White is the sheet the score is printed on. */
   background: var(--paper);
-  border: var(--edge) solid var(--ink);
+  /* ⚠️ 用「格」而不是 --edge（那是 em）。
+     按鈕的粗邊是刻意的，它跟著按鈕自己的字級縮放很合理；但卡片是一個大面，
+     它的外框不該跟著「裡面的字有多大」變粗——字級一調，框就莫名其妙變粗了。
+     改用格之後，這條線只跟棋盤的比例有關，跟內容無關。 */
+  border: max(2px, calc(var(--cell) * 0.12)) solid var(--ink);
   box-shadow: calc(var(--cell) * 0.28) calc(var(--cell) * 0.28) 0 var(--shadow);
-  /* `--edge` is an em, and these boxes have no font-size of their own, so pin
-     one: without it the border is measured against the inherited 12px. */
-  font-size: max(6px, calc(var(--cell) * 0.32));
+  /* 卡片裡所有內容（名單、表格、說明）的基準字級。 */
+  font-size: max(8px, calc(var(--cell) * 0.38));
+}
+
+/* 永遠是黑底白字的卡片，不管背後那一頁是什麼主題。
+   跟 .screen[data-theme="dark"] 是同一套 token，只是作用範圍縮到這張卡片上。
+
+   ⚠️ 這裡要重寫一次 color，理由跟 .screen 那條一模一樣：
+   色彩是「繼承計算後的值」，外面已經把 color 算成黑色了，
+   光是在這裡重新定義 --ink 不會讓已經繼承下來的黑色重算。 */
+.panel[data-tone="ink"] {
+  --bg: #000000;
+  --fg: #ffffff;
+  --ink: #ffffff;
+  --paper: #000000;
+  --surface: #000000;
+  --shadow: rgba(255, 255, 255, 0.3);
+  --band: rgba(255, 255, 255, 0.1);
+  --emboss: transparent;
+  color: var(--ink);
 }
 
 /* 寬度以「格」為單位，跟畫面上其他東西同一個比例。
@@ -496,7 +517,7 @@ body {
 
 .panel__heading {
   margin: calc(var(--cell) * 0.3) 0 0;
-  font-size: max(6px, calc(var(--cell) * 0.32));
+  font-size: max(7px, calc(var(--cell) * 0.34));
   letter-spacing: 0.16em;
   opacity: 0.75;
 }
@@ -528,7 +549,7 @@ body {
 }
 
 .field__label {
-  font-size: max(5px, calc(var(--cell) * 0.28));
+  font-size: max(7px, calc(var(--cell) * 0.32));
   letter-spacing: 0.18em;
   opacity: 0.75;
 }
@@ -562,7 +583,7 @@ body {
 
 .field__note {
   margin: 0;
-  font-size: max(5px, calc(var(--cell) * 0.26));
+  font-size: max(7px, calc(var(--cell) * 0.32));
   letter-spacing: 0.12em;
   line-height: 1.7;
   opacity: 0.7;
@@ -654,7 +675,7 @@ body {
 .players__state {
   min-width: 6em;
   text-align: right;
-  font-size: 0.85em;
+  font-size: 0.92em;
   opacity: 0.7;
 }
 
@@ -669,7 +690,7 @@ body {
 
 .badge {
   flex: none;
-  font-size: 0.75em;
+  font-size: 0.85em;
   letter-spacing: 0.1em;
   padding: 0.15em 0.4em;
   background: var(--ink);
@@ -684,6 +705,55 @@ body {
 
 /* --- during a round ------------------------------------------------------- */
 
+/* 遊戲區域的邊界。
+   棋盤是黑的，黑邊也是黑的，所以「哪裡是牆」在共用棋盤上完全看不出來——
+   單人模式不需要這條線，因為底色是palette的顏色，邊界自己就分明。
+
+   用 inset 的 box-shadow 而不是 border：border 會佔掉版面（box-sizing 之下
+   canvas 就不再剛好是 .stage 那麼大），而 fitBoard() 算出來的整數格線
+   一旦被擠掉一兩個像素，每一格就不再是正方形。
+   這一層是 .ui 的子元素，而 .ui 的 z-index 在 canvas 之上，所以線畫得到棋盤上面。
+
+   顏色用 --ink：在深色主題裡它就是白的，語意是「前景」而不是「白色」。 */
+.boundary {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 max(2px, calc(var(--cell) * 0.1)) var(--ink);
+}
+
+/* 跟著自己那條蛇的小名牌。
+   取代了原本畫在頭上的白框：白框只有「已經知道要找它」的人看得懂，
+   名字是直接講出來的，而且跟角落名單講的是同一件事。
+   位置用「棋盤的百分比」——.ui 是 inset: 0 蓋滿 .stage，所以 0–100% 就是棋盤本身，
+   不需要量任何東西，視窗一縮它自己就還在正確的格子上。 */
+.nametag {
+  position: absolute;
+  font-size: max(5px, calc(var(--cell) * 0.3));
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* 掛在頭的哪一邊由 NameTag.tsx 決定（永遠是「不是自己身體」的那一邊），
+   left/top 已經對到那一格的對應邊，這裡只負責把名字推開一點點。
+   間距用 em：跟著字級走，棋盤縮小時名字不會離頭愈來愈遠。 */
+.nametag[data-at="above"] {
+  transform: translate(-50%, -140%);
+}
+
+.nametag[data-at="below"] {
+  transform: translate(-50%, 40%);
+}
+
+.nametag[data-at="right"] {
+  transform: translate(0.7em, -50%);
+}
+
+.nametag[data-at="left"] {
+  transform: translate(calc(-100% - 0.7em), -50%);
+}
+
 /* The live standing sits in the corner rather than following the snakes
    around: five labels chasing five heads would cover the board, and on a phone
    they would cover most of it. */
@@ -691,9 +761,9 @@ body {
   position: absolute;
   top: calc(var(--cell) * 2);
   right: calc(var(--cell) * 0.6);
-  width: calc(var(--cell) * 9);
+  width: calc(var(--cell) * 10.5);
   max-width: 45%;
-  font-size: max(5px, calc(var(--cell) * 0.28));
+  font-size: max(7px, calc(var(--cell) * 0.32));
   letter-spacing: 0.06em;
 }
 
@@ -706,8 +776,14 @@ body {
   }
 
   .side {
-    width: calc(var(--cell) * 11);
+    width: calc(var(--cell) * 13);
   }
+}
+
+.side__code {
+  margin: 0 0 calc(var(--cell) * 0.25);
+  letter-spacing: 0.2em;
+  opacity: 0.7;
 }
 
 .countdown {
@@ -728,12 +804,14 @@ body {
   transform: none;
 }
 
+/* 這一行數字由 ChromaticText 畫（見 SoloScreen），所以沒有位移陰影：
+   色差效果自己就是那層「偏移的顏色」，再加一層投影只會糊掉。
+   它需要深色底才看得到色邊，那張卡片因此是 data-tone="ink"。 */
 .bigscore {
   margin: 0;
   text-align: center;
   font-size: max(28px, calc(var(--cell) * 2.6));
   letter-spacing: 0.1em;
-  text-shadow: 0.06em 0.06em 0 var(--emboss);
 }
 
 /* Buttons stacked rather than in a row, for the main menu's three choices. */

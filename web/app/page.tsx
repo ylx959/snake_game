@@ -96,7 +96,6 @@ export default function Home() {
           {phase === "menu" && (
             <MenuScreen
               send={session.send}
-              setNickname={session.setNickname}
               nickname={session.nickname}
               config={session.config}
               leaderboard={session.leaderboard}

@@ -154,6 +154,17 @@ export type ClientMessage =
   | { type: "play_again" }
   /** Steering: the one command that means something in both modes. */
   | { type: "turn"; direction: Direction }
+  /**
+   * Open the solo board. Does **not** start the game: it comes back READY, with
+   * the snake standing in the middle and the prompt over it, and the run begins
+   * on the first arrow key.
+   *
+   * Carries the nickname for the same reason `create_room` does: this run's
+   * score is going on a public table, so the server has to have accepted the
+   * name before the run exists rather than racing a separate message against it.
+   */
+  | { type: "solo_enter"; nickname?: string }
+  /** Start, or resume from a pause. The Start button, and Space. */
   | { type: "solo_start" }
   | { type: "solo_pause" }
   | { type: "solo_reset" }

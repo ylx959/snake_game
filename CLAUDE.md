@@ -275,20 +275,45 @@ Rendering details that are load-bearing:
   size; this class owns only the pixel buffer.
 - `GameCanvas` resizes the canvas only when the box or the board actually
   changed, never on a tick: resizing reallocates the backing store and wipes it.
+- **`GameCanvas` wipes the canvas when there is no board**, rather than
+  returning early. A canvas holds its last frame for ever, so leaving a round
+  for the menu left the room's snakes sitting behind it — and then stretched,
+  because the stage changes shape between the two board sizes while the backing
+  store still held the old picture. `Renderer.clear()` resets the transform
+  before clearing: `draw` leaves a device-pixel-ratio scale on the context, and
+  clearing through it would wipe only the top-left corner on a retina display.
 - **A shared board is black, and that is what makes its colours work.** An
   earlier version cycled the palette there too, and a cyan snake on the cyan
   board was very nearly invisible — the eight backgrounds cover the whole hue
   circle, so no five player colours can stay clear of all of them. A fixed black
   ground fixes it at the source: all five read against it, in every round. The
-  apple inverts with the ground (white there, black on a palette), and each
-  segment keeps a black inner ring, which on black shows as a hairline gap and
-  gives the body its segmented look. Colour is still never the only cue: your
-  own head wears a white ring, and the corner roster numbers and names
-  everyone.
-- **The menu title's RGB split is three colour channels screened together**
-  (`components/ui/ChromaticText.tsx`). Two details are load-bearing. It assumes
-  a **dark ground** — `screen` over a light background only lightens it, so the
-  fringes wash out; it is used only on the menu, which is black by definition.
+  apple inverts with the ground — white there, black on a palette.
+- **A shared board draws its snakes exactly as solo does**: same rounded
+  rectangle, same radius, same black eyes. Only the fill differs, and only
+  because five snakes have to be told apart. A room is meant to look like the
+  game, not like a different one.
+- **`.boundary` is the white frame around a shared board**, and it is a
+  `box-shadow: inset`, not a `border`. A border takes layout: under
+  `box-sizing: border-box` the canvas stops being exactly `.stage`, and once
+  `fitBoard()`'s whole-pixel grid loses a pixel or two the cells stop being
+  square. Solo needs no such line — its ground is a palette colour, so the edge
+  of the board is the edge of the colour. A black board on a black page has no
+  visible wall at all.
+- **Your own snake is found by a name tag, not a marker on the board**
+  (`components/game/NameTag.tsx`). A white ring round the head only says "this
+  one is yours" to somebody who already knew to look for it. The tag positions
+  itself in **percentages of the board** — `.ui` is `inset: 0` over `.stage`, so
+  0–100% across it *is* the board — which is why it needs no `ResizeObserver`,
+  no `getBoundingClientRect`, and no second copy of the fit. It sits *across*
+  the heading, never along it: a snake running down has its own body directly
+  above its head, so "above the head" is on the body half the time.
+- **The RGB split is three colour channels screened together**
+  (`components/ui/ChromaticText.tsx`), used on the menu title and on the solo
+  Game Over score. Two details are load-bearing. It assumes a **dark ground** —
+  `screen` over a light background only lightens it, so the fringes wash out.
+  Both places supply one: the menu is black by definition, and the Game Over
+  card is `tone="ink"` for exactly this reason. Moving it anywhere else means
+  checking what is behind it first.
   And the word is in the DOM **once**: the element's own text is the green
   channel and `::before`/`::after` redraw it from `data-text`. An earlier
   version used three real spans with two `aria-hidden`, and the heading's
@@ -304,6 +329,15 @@ Rendering details that are load-bearing:
   order, and a canvas repainting eight times a second is exactly the thing a
   browser promotes to its own GPU layer, which can then paint over the DOM
   above it. Defensive, not a fix for an observed bug.
+
+`Panel` takes a `tone`. "paper" follows the screen — white on a solo run, black
+on the dark screens. "ink" is always black with white type, for a card that has
+to be dark for its *contents’* sake rather than its screen’s: the Game Over
+card is ink because the chromatic score sitting in it needs a dark ground. The
+ink rule redefines the same tokens `.screen[data-theme="dark"]` does, scoped to
+one card — and re-declares `color: var(--ink)` for the same reason that one
+does: `color` inherits as a computed value, so redefining `--ink` alone would
+leave the subtree on the colour it already inherited.
 
 `.controls` hides itself while solo `status === "running"` (`data-hidden` in
 `SoloScreen`) so the board is uncluttered in play; Space, R and game over bring
@@ -357,13 +391,41 @@ browser is told its own, once, in `menu_ready`, only so it can find its own
 snake on a shared board.
 
 Nicknames are 2–12 characters, must be unique within a room, and may repeat
-freely across rooms. `web/lib/nickname.ts` runs the same rule as
-`backend/room/nickname.py` — the client copy only exists so a player finds out
-while typing rather than after a round trip; the server re-checks everything.
+freely across rooms — **except** that a name sitting in the visible top ten of
+the leaderboard is spoken for and nobody else may play under it
+(`LeaderboardRepository.reserved_nicknames`, enforced in
+`Connection._set_nickname`). It is a live lookup, not a cached set: the table
+moves whenever somebody finishes a run. Note the consequence — once you are in
+the top ten, that name is refused for everyone, *including you*.
+
+`web/lib/nickname.ts` runs the length and shape rules early so a player finds
+out while typing rather than after a round trip; the server re-checks
+everything, and the reserved-name rule is server-only because the browser has
+no business holding the table.
+
+**A nickname travels with the command it belongs to** — `create_room`,
+`join_room` and `solo_start` all carry it. There is still a `set_nickname`
+message, but the menus no longer use it: sending it separately raced the command
+that followed, so a refusal ("that name is on the leaderboard") arrived after the
+run had already started under the old name.
 
 Rooms live in memory and are not persisted; a room is worth nothing once
 everyone has left. The leaderboard is the only durable state, behind the
 `LeaderboardRepository` Protocol, configured by `DATABASE_URL` alone.
 
 **There is no client message that carries a score.** The only route into the
-leaderboard is a finished, server-run solo game, and one run writes one row.
+leaderboard is a finished, server-run solo game, and one run writes one row —
+unless it scored **0**, which `MIN_RECORDED_SCORE` refuses at the store
+boundary. A run that ate nothing is the commonest way to leave the board and
+says nothing about the player; a table of them buries the scores that mean
+something. The run still finishes, the player is still told what they scored,
+and the name is still spent — it is simply not written down. `SoloScreen` says
+so on the card, because otherwise the player looks for a row that was never
+going to be there.
+
+**`solo_enter` opens the solo board; `solo_start` starts it.** They are separate
+messages because the opening pause is part of the game: the board comes back
+READY, the snake standing in the middle with the prompt over it, and the run
+begins on the player's first arrow key (`Game.turn()` has always done this).
+An earlier version had the menu send `solo_start`, which dropped the player
+straight into a snake already moving.

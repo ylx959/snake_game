@@ -25,7 +25,7 @@ import time
 from enum import Enum
 
 import protocol
-from game.command import Resize
+from game.command import Resize, Start
 from game.command import apply as apply_solo
 from game.game import Game, GameStatus
 from leaderboard.repository import LeaderboardRepository
@@ -88,14 +88,14 @@ class Connection:
 
         match command:
             case protocol.SetNickname(nickname):
-                self._set_nickname(nickname)
+                await self._set_nickname(nickname)
             case protocol.GetLeaderboard(limit):
                 await self._send_leaderboard(limit)
 
             case protocol.CreateRoom(nickname):
-                self._create_room(nickname)
+                await self._create_room(nickname)
             case protocol.JoinRoom(code, nickname):
-                self._join_room(code, nickname)
+                await self._join_room(code, nickname)
             case protocol.LeaveRoom():
                 self._leave_room()
                 self.session.send(
@@ -111,6 +111,8 @@ class Connection:
             case protocol.Turn(direction):
                 self._turn(direction)
 
+            case protocol.SoloEnter(nickname):
+                await self._solo_enter(nickname)
             case protocol.Solo(verb):
                 self._solo_command(verb)
             case protocol.SoloExit():
@@ -132,12 +134,19 @@ class Connection:
 
     # --- identity ---------------------------------------------------------
 
-    def _set_nickname(self, raw: str) -> bool:
+    async def _set_nickname(self, raw: str) -> bool:
         """Claim a display name. False when it was refused and the player told.
 
-        A nickname is never an identity - `session.player_id` is, and the
-        client cannot choose or change it - so changing a name mid-session is
-        harmless, except inside a room, where it would make the lobby lie.
+        A nickname is never an identity - `session.player_id` is, and the client
+        cannot choose or change it - so changing a name mid-session is harmless,
+        except inside a room, where it would make the lobby lie.
+
+        The last check is the only one that needs the database: a name sitting
+        in the visible top ten is spoken for, so nobody else can turn up playing
+        under it. It is deliberately a *live* lookup rather than a cached set -
+        the table moves every time somebody finishes a run, and a stale list
+        would either reserve a name that has dropped off or let one through that
+        just arrived.
         """
         if self.session.room_code is not None:
             self.session.send(protocol.error("already_started"))
@@ -148,14 +157,19 @@ class Connection:
             self.session.send(protocol.error(cleaned.error or "nickname_invalid"))
             return False
 
+        reserved = await asyncio.to_thread(self.scores.reserved_nicknames)
+        if cleaned.nickname.casefold() in reserved:
+            self.session.send(protocol.error("nickname_reserved"))
+            return False
+
         self.session.nickname = cleaned.nickname
         self.session.send(protocol.nickname_set(cleaned.nickname))
         return True
 
-    def _require_nickname(self, offered: str | None) -> bool:
+    async def _require_nickname(self, offered: str | None) -> bool:
         """Take the name the message carried, or fall back to the session's."""
         if offered is not None:
-            return self._set_nickname(offered)
+            return await self._set_nickname(offered)
         if self.session.nickname is None:
             self.session.send(protocol.error("nickname_required"))
             return False
@@ -187,6 +201,31 @@ class Connection:
         await self._send_leaderboard(protocol.GetLeaderboard(10).limit, last_score=game.score)
 
     # --- solo -------------------------------------------------------------
+
+    async def _solo_enter(self, nickname: str | None) -> None:
+        """Open the solo board. Does **not** start the game.
+
+        The board goes back READY: the snake standing in the middle, the prompt
+        over it, waiting. That pause is the game's opening - the run begins on
+        the player's first arrow key, which is what `Game.turn()` has always
+        done. Starting here instead would drop the player straight into a moving
+        snake they never asked to move.
+
+        The name is settled here rather than in a separate message the browser
+        races against this one: this run's score is going on a public table, so
+        a refused name has to stop the run before it exists.
+        """
+        if not await self._require_nickname(nickname):
+            return
+
+        self._leave_room()
+        self._leave_solo()  # drop any previous run, and its clock with it
+
+        self.solo = Game()
+        self.mode = Mode.SOLO
+        self._solo_recorded = False
+        self._start_solo_clock()
+        self.session.send(self.solo.to_dict())
 
     def _solo_command(self, verb: object) -> None:
         # A reshape only means something to a game that exists; it is not a way
@@ -247,8 +286,8 @@ class Connection:
 
     # --- rooms ------------------------------------------------------------
 
-    def _create_room(self, nickname: str | None) -> None:
-        if not self._require_nickname(nickname):
+    async def _create_room(self, nickname: str | None) -> None:
+        if not await self._require_nickname(nickname):
             return
         self._leave_solo()
         self._leave_room()
@@ -262,11 +301,11 @@ class Connection:
         self.mode = Mode.GROUP
         self.session.send(protocol.room_created(room.lobby_state()))
 
-    def _join_room(self, code: str, nickname: str | None) -> None:
+    async def _join_room(self, code: str, nickname: str | None) -> None:
         if not code:
             self.session.send(protocol.error("bad_code"))
             return
-        if not self._require_nickname(nickname):
+        if not await self._require_nickname(nickname):
             return
         self._leave_solo()
         self._leave_room()

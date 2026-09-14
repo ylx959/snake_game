@@ -19,7 +19,7 @@ import type { Cell, Direction, GameState, MultiplayerState } from "@/types/game"
  */
 export type BoardView =
   | { mode: "solo"; state: GameState }
-  | { mode: "group"; state: MultiplayerState; you: string | null };
+  | { mode: "group"; state: MultiplayerState };
 
 /**
  * The head's eyes: two fully rounded bars that run along the way the snake is
@@ -53,22 +53,6 @@ const MIN_CELL_FOR_EYES = 10;
 
 /** How far the apple is inset, so it reads as an object and not a wall tile. */
 const FOOD_INSET = 0.14;
-
-/**
- * The black edge inside every segment on a shared board, as a fraction of a
- * cell.
- *
- * Solo needs none: it has one snake, and the palette pairs its colour with the
- * background on purpose. A shared board is black - the palette is the solo
- * game's - so the ring does not have to rescue contrast; the five player
- * colours all read against black on their own. What it does instead is show a
- * hairline of the black ground between segments, which is what a snake on a
- * ninety-something handheld looked like.
- */
-const OUTLINE_INK = 0.11;
-
-/** The ring that marks your own head, as a fraction of a cell. */
-const OWN_RING = 0.16;
 
 /** The cells of every snake in a view, for the DOM text mask to clip against. */
 export function litCells(view: BoardView | null): Cell[] {
@@ -115,18 +99,40 @@ export class Renderer {
     this.cellHeight = boxHeight / rows;
   }
 
+  /**
+   * Wipe the board.
+   *
+   * A canvas keeps its last frame for ever unless something says otherwise, so
+   * leaving a round for the menu left the room's snakes sitting behind the
+   * menu - and then stretched, because the stage changes shape between the two
+   * board sizes while the backing store still held the old picture.
+   *
+   * The transform is reset first: `draw` leaves a device-pixel-ratio scale on
+   * the context, and clearing `canvas.width` x `canvas.height` through that
+   * scale would wipe only the top-left corner on any display where the ratio
+   * is not 1.
+   */
+  clear(): void {
+    const { ctx, canvas } = this;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
   draw(view: BoardView): void {
     const { ctx } = this;
     const { state } = view;
 
-    // A solo run wears the palette. A shared board does not - it is black, like
-    // every screen that is not the solo game, which is also what lets five
-    // player colours read the same way in every round.
+    // A solo run wears the palette. A shared board does not: it is black, and
+    // stays black, which is what lets five player colours read the same way in
+    // every round instead of against a ground that moves under them. The white
+    // frame marking its edge is DOM, not canvas - see `.boundary`.
     ctx.fillStyle = view.mode === "solo" ? paletteAt(state.palette).bg : INK;
     ctx.fillRect(0, 0, state.width * this.cellWidth, state.height * this.cellHeight);
 
     if (view.mode === "solo") this.drawSolo(view.state);
-    else this.drawGroup(view.state, view.you);
+    else this.drawGroup(view.state);
   }
 
   // --- solo: unchanged, and deliberately so ------------------------------
@@ -141,29 +147,29 @@ export class Renderer {
 
   // --- a shared board ----------------------------------------------------
 
-  private drawGroup(state: MultiplayerState, you: string | null): void {
+  private drawGroup(state: MultiplayerState): void {
     // White, not black: the apple is black on every palette because black is
     // the one colour legible on all eight of them - and on this board black is
     // the ground, so it inverts with it.
     for (const cell of state.food) this.fillCell(cell, PAPER, FOOD_INSET);
 
-    // Bodies first, then every head's eyes, so a head that another snake is
-    // drawn over still shows which way it was looking.
+    // Exactly the same segment as solo draws: the same rounded rectangle, the
+    // same radius, the same black eyes on the head. Only the fill differs, and
+    // only because five snakes have to be told apart. A shared board is meant
+    // to look like the game, not like a different one.
+    //
+    // Bodies first, then every head's eyes, so a head another snake is drawn
+    // over still shows which way it was looking.
     for (const snake of state.snakes) {
       if (!snake.alive) continue; // a dead snake is off the board
       const color = playerColorAt(snake.color);
-      for (const cell of snake.cells) {
-        this.fillSnakeCell(cell, color);
-        this.outlineCell(cell, INK, OUTLINE_INK);
-      }
+      for (const cell of snake.cells) this.fillSnakeCell(cell, color);
     }
 
     for (const snake of state.snakes) {
-      if (!snake.alive || snake.cells.length === 0) continue;
-      // Your own head wears a white ring. A cue that is not a colour, so it
-      // still works for a player who cannot tell the five hues apart.
-      if (snake.player_id === you) this.outlineCell(snake.cells[0], PAPER, OWN_RING);
-      this.drawEyes(snake.cells[0], snake.direction);
+      if (snake.alive && snake.cells.length > 0) {
+        this.drawEyes(snake.cells[0], snake.direction);
+      }
     }
   }
 
@@ -221,34 +227,6 @@ export class Renderer {
     this.ctx.beginPath();
     this.ctx.roundRect(left, top, width, height, snakeCellRadius(width, height));
     this.ctx.fill();
-  }
-
-  /**
-   * A line just inside a cell's edge, optionally tucked in behind another one.
-   *
-   * Inset by half the line width, because a canvas stroke straddles its path:
-   * drawn on the edge itself, half of it would land in the neighbouring cell
-   * and the outlines of two touching segments would read as one thick seam.
-   * `behind` is the thickness of a ring already drawn outside this one, so a
-   * second ring sits flush against the first rather than overlapping it.
-   */
-  private outlineCell(cell: Cell, color: string, thickness: number, behind = 0): void {
-    const [left, top, width, height] = this.bounds(cell);
-    const short = Math.min(width, height);
-    const line = Math.max(1, Math.round(short * thickness));
-    const inset = Math.max(1, Math.round(short * behind)) * (behind > 0 ? 1 : 0) + line / 2;
-
-    this.ctx.strokeStyle = color;
-    this.ctx.lineWidth = line;
-    this.ctx.beginPath();
-    this.ctx.roundRect(
-      left + inset,
-      top + inset,
-      width - line,
-      height - line,
-      Math.max(0, snakeCellRadius(width, height) - inset),
-    );
-    this.ctx.stroke();
   }
 
   /**

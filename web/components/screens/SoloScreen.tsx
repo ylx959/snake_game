@@ -15,6 +15,7 @@ import { Prompt } from "@/components/game/Prompt";
 import { ScoreBoard } from "@/components/game/ScoreBoard";
 import { StartPauseButton } from "@/components/game/StartPauseButton";
 import { LeaderboardTable } from "@/components/screens/LeaderboardTable";
+import { ChromaticText } from "@/components/ui/ChromaticText";
 import { Panel } from "@/components/ui/Panel";
 import type { BoardView } from "@/lib/renderer";
 import type { ClientMessage, ConnectionStatus, GameState, LeaderboardEntry } from "@/types/game";
@@ -35,6 +36,7 @@ export function SoloScreen({
   send: (message: ClientMessage) => void;
 }) {
   const over = state?.status === "game_over";
+  const score = lastScore ?? state?.score ?? 0;
 
   return (
     <>
@@ -44,8 +46,15 @@ export function SoloScreen({
       <div className="ui__gap" />
 
       {over && (
-        <Panel title="Game over" size="narrow">
-          <p className="bigscore">{String(lastScore ?? state?.score ?? 0).padStart(3, "0")}</p>
+        <Panel title="Game over" size="narrow" tone="ink">
+          <p className="bigscore">
+            <ChromaticText>{String(score).padStart(3, "0")}</ChromaticText>
+          </p>
+          {/* A scoreless run is not written down, so say so - otherwise the
+              player looks for a row that was never going to be there. */}
+          {score === 0 && (
+            <p className="field__note">Eat at least one apple to make the table</p>
+          )}
           <h2 className="panel__heading">Global top 10</h2>
           <LeaderboardTable entries={leaderboard} />
         </Panel>
