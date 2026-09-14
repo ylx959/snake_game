@@ -23,7 +23,7 @@ import { ResultsScreen } from "@/components/screens/ResultsScreen";
 import { SoloScreen } from "@/components/screens/SoloScreen";
 import { useBoardRect } from "@/hooks/useBoardRect";
 import { useGameSession } from "@/hooks/useGameSession";
-import { paletteAt } from "@/lib/palette";
+import { PAPER, paletteAt } from "@/lib/palette";
 import { boardShape } from "@/lib/renderer";
 
 /** The solo board, and the shape of the page before the server has spoken. */
@@ -64,9 +64,13 @@ export default function Home() {
   // is the stylesheet's default: black type, and a black `.boundary` marking a
   // wall that kills you in front of four other people.
   //
-  // `--emboss` is the one token a boardless default would get wrong. It follows
-  // `--fg`, which at the root is still solo's first foreground, so a room's big
-  // type would pick up a red drop shadow it never asked for.
+  // Two tokens a room has to name even though it has no pair, because both
+  // fall back to `:root` - which still holds solo's *first* pair, for the sake
+  // of server-rendered HTML before React takes over. Left alone, a room quietly
+  // wears bits of palette 0: `--emboss` follows `--fg` and puts a red drop
+  // shadow under the big type, and `--bg` is what a hovered button inverts its
+  // text to, so `BACK TO LOBBY` came out cyan. `--bg` is the board here, and
+  // the board is white.
   const palette = phase === "solo" ? paletteAt(session.solo?.palette ?? 0) : null;
   const onBoard = palette !== null || view?.mode === "group";
 
@@ -78,7 +82,7 @@ export default function Home() {
         palette
           ? ({ "--bg": palette.bg, "--fg": palette.fg } as React.CSSProperties)
           : view?.mode === "group"
-            ? ({ "--emboss": "transparent" } as React.CSSProperties)
+            ? ({ "--bg": PAPER, "--emboss": "transparent" } as React.CSSProperties)
             : undefined
       }
     >
