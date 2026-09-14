@@ -111,17 +111,18 @@ Two places bend that rule, both deliberately:
   `__init__` and nowhere else — so restarting a run keeps the colours and only a
   new connection starts from pair 0.
 
-  **Both boards paint it; only the trigger differs.** Solo turns on every apple.
-  A room turns on every **death** — an apple is one player's business and nobody
-  else can see it happen, while a death is the whole room's, and it is the
-  moment everyone wants marked. `MultiplayerGame.kill()` carries the same rule
-  for a player who leaves mid-round, so "a death repaints the room" is one rule
-  in one file rather than two that have to be remembered together.
+  **Solo only.** A room is white and stays white, and `MultiplayerGame` has no
+  `palette` at all — not on the object and not on the wire. It did for a while,
+  cycling one step per death; that is gone rather than merely unused, so there
+  is no field left for the two sides of the contract to disagree about.
 
-  A screen showing a board wears that board's pair; the text-only screens —
-  loading, the menus, a lobby, the countdown — take `data-theme="dark"` in
-  `globals.css`, which inverts the same five tokens rather than restating any
-  rule.
+  A solo screen wears its pair. A room takes the stylesheet's default — black
+  type on the white board — and the text-only screens (loading, the menus, a
+  lobby, the countdown) take `data-theme="dark"`, which inverts the same five
+  tokens rather than restating any rule. A room board also sets `--emboss`
+  inline: it follows `--fg`, which at the root is still solo's first foreground,
+  so without that a room's big type would pick up a red drop shadow it never
+  asked for.
 
   Two traps in that theme block. `--void` is *not* redefined for the dark theme —
   it is the letterbox, and following `--ink` would turn it white around the
@@ -286,31 +287,23 @@ Rendering details that are load-bearing:
   store still held the old picture. `Renderer.clear()` resets the transform
   before clearing: `draw` leaves a device-pixel-ratio scale on the context, and
   clearing through it would wipe only the top-left corner on a retina display.
-- **A room draws its backgrounds from `ROOM_BACKGROUNDS`, not from `PALETTES`.**
-  The eight solo pairs were chosen for one snake whose colour moves with them; a
-  room has five whose colours cannot move, because a colour is which player you
-  are. Reusing them put `#FFE93D` under the player already wearing `#FFE93D` —
-  the same colour, ΔE 0 — and cyan under cyan at ΔE 3.9, below what an eye can
-  resolve at all. `ROOM_BACKGROUNDS` is eight grounds that satisfy three
-  things at once, all of them measured in `test/palette.test.mjs` rather than
-  trusted: at least ΔE 40 from every player colour (the closest is 46); ΔE 40
-  apart from each other in this order (the closest is 64), because a death is
-  meant to be *felt* and two neighbouring browns would look like nothing
-  happened; and **bright enough to be lit**.
+- **A room board is white, and `PLAYER_COLORS` is chosen against it.** The five
+  were originally picked for a black board, where luminance is what makes a
+  colour visible; on white that same property erases three of them — `#FFE93D`
+  lands at 1.24:1 and `#3EE03E` at 1.76:1, which is not a hard-to-read snake but
+  an invisible one. They are now the same five hues *darkened*, each carrying at
+  least 4.5:1 against the ground and at least ΔE 40 from each other, both
+  measured in `test/palette.test.mjs` rather than trusted.
 
-  That last one cost a round trip worth recording. The first version of this
-  list was deep navies and wines — safely clear of every snake, and the
-  spotlight all but disappeared on them. The light is only as visible as the
-  difference between lit ground and the same ground under 90% black: solo's
-  dimmest pair manages about 35 points of L and reads fine, those navies managed
-  15. These sit at L 40-48, so the gap is 38-45 and a room lights up the way
-  solo does. Dark enough, still, for white type and a white wall over them.
+  The board reached white the long way, and the wrong turns are worth knowing.
+  It was black; then it cycled the solo palette on every death, which put
+  `#FFE93D` under the player already wearing `#FFE93D` — the same colour, ΔE 0;
+  then it cycled a room-specific list built to avoid exactly that, which was too
+  dark for the spotlight to show on. A fixed white ground ends the whole class of
+  problem: there is one background, it never moves, and five colours can be
+  chosen against it once.
 
-  Because those grounds are dark, a room's screen keeps `data-theme="dark"`:
-  white type, a white `.boundary`, and a **white apple** — `inkOn()` inverts it
-  against the ground rather than hard-coding per mode. Solo is untouched: its
-  apple is black on all eight palettes exactly as it always has been, which is a
-  decision about the art rather than about contrast.
+  The apple is black on it, like solo's.
 
 - **A shared board draws its snakes exactly as solo does**: same hard square,
   same black eyes. Only the fill differs, and only because five snakes have to

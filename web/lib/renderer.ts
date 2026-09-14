@@ -9,7 +9,7 @@
  */
 
 import { cellEdges } from "@/lib/board";
-import { INK, inkOn, paletteAt, playerColorAt, roomBackgroundAt } from "@/lib/palette";
+import { INK, PAPER, paletteAt, playerColorAt } from "@/lib/palette";
 import {
   type FoggedBoard,
   applyFog,
@@ -155,14 +155,12 @@ export class Renderer {
     const { ctx } = this;
     const { state } = view;
 
-    // Both boards cycle a background on a server-sent index; what advances it
-    // differs - solo on every apple, a room on every death (see
-    // `MultiplayerGame.tick`) - and so does the list they draw from. A room's
-    // is deep and kept clear of all five player colours, because there the
-    // background has to sit under snakes whose colours cannot move out of its
-    // way. See `ROOM_BACKGROUNDS`.
-    const ground =
-      view.mode === "solo" ? paletteAt(state.palette).bg : roomBackgroundAt(state.palette);
+    // Solo cycles a background on a server-sent index, one step per apple. A
+    // room does not cycle at all: it is white, and stays white. The five player
+    // colours cannot move out of a background's way - a colour is which player
+    // you are - so the ground is the thing that holds still, and `PLAYER_COLORS`
+    // is chosen against it.
+    const ground = view.mode === "solo" ? paletteAt(view.state.palette).bg : PAPER;
     ctx.fillStyle = ground;
     ctx.fillRect(0, 0, state.width * this.cellWidth, state.height * this.cellHeight);
 
@@ -187,10 +185,8 @@ export class Renderer {
       const board = applyFog(view.state, view.you);
       this.drawGroup(board);
       this.drawVeil(state.width, state.height, visionFocus(view.state.snakes, view.you));
-      // A room's grounds are deep, so the apple inverts with them. Asked rather
-      // than hard-coded, so a retuned background cannot leave a black apple on
-      // a black board - `test/palette.test.mjs` pins that they all stay dark.
-      for (const cell of board.food) this.drawFood(cell, ground, inkOn(ground));
+      // Black, like solo's: the ground is white here, and black reads on it.
+      for (const cell of board.food) this.drawFood(cell, ground, INK);
     }
   }
 

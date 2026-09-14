@@ -57,8 +57,6 @@ export interface MultiplayerState {
   height: number;
   status: MultiStatus;
   ticks: number;
-  /** Shared: any player's apple advances it for everybody at once. */
-  palette: number;
   food: Cell[];
   snakes: SnakeView[];
   alive: number;

@@ -1,15 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  INK,
-  PAPER,
-  PALETTES,
-  PLAYER_COLORS,
-  ROOM_BACKGROUNDS,
-  inkOn,
-  roomBackgroundAt,
-} from "../lib/palette.ts";
+import { PAPER, PALETTES, PLAYER_COLORS } from "../lib/palette.ts";
 
 /**
  * CIE Lab, so "are these two colours alike?" is asked the way an eye asks it.
@@ -41,92 +33,87 @@ function difference(first, second) {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
 
-/**
- * Comfortably past "not the same colour" and past "not a near-miss" too: at
- * this distance two colours are not in the same family, let alone confusable
- * with a snake moving eight cells a second across them.
- */
+/** Relative luminance, for the contrast ratio below. */
+function luminance(hex) {
+  const packed = Number.parseInt(hex.slice(1), 16);
+  const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const r = toLinear(((packed >> 16) & 255) / 255);
+  const g = toLinear(((packed >> 8) & 255) / 255);
+  const b = toLinear((packed & 255) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrast(first, second) {
+  const [a, b] = [luminance(first), luminance(second)];
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+/** A snake this far off the ground is a shape, not a smudge. */
+const READABLE = 4.5;
+
+/** Past "not the same colour", and past "not a near-miss" too. */
 const CLEARLY_DIFFERENT = 40;
 
 test("the eye-distance helper agrees with the eye on a known near-miss", () => {
-  // The pair that started this: the old room background against the player
-  // colour it sat under. Numerically far apart, visually the same cyan.
+  // Numerically far apart, visually the same cyan.
   assert.ok(difference("#00D6F0", "#22DFF5") < 5);
   assert.equal(difference("#FFE93D", "#FFE93D"), 0);
   // And a pair nobody would confuse, to show the scale is not just small.
   assert.ok(difference("#000000", "#FFFFFF") > 90);
 });
 
-test("no room background is the same colour as a player, or near one", () => {
+test("every player colour reads on the white board it is played on", () => {
+  let worst = { ratio: Infinity };
+
+  for (const player of PLAYER_COLORS) {
+    const ratio = contrast(player, PAPER);
+    if (ratio < worst.ratio) worst = { ratio, player };
+  }
+
+  assert.ok(
+    worst.ratio >= READABLE,
+    `${worst.player} is only ${worst.ratio.toFixed(2)}:1 against the board`,
+  );
+});
+
+test("the old bright colours are exactly why they had to be retuned", () => {
+  // Not a rule being enforced - a fact being recorded. These five were chosen
+  // for a black board, where luminance is what made them visible; on white the
+  // same property makes three of them disappear.
+  const chosenForBlack = ["#F5001E", "#22DFF5", "#FFE93D", "#3EE03E", "#FF0CBA"];
+  const vanishing = chosenForBlack.filter((hex) => contrast(hex, PAPER) < 2);
+
+  assert.deepEqual(vanishing, ["#22DFF5", "#FFE93D", "#3EE03E"]);
+  assert.ok(contrast("#FFE93D", PAPER) < 1.3, "yellow on white is barely a colour at all");
+});
+
+test("no two players wear the same colour, or near it", () => {
   let closest = { distance: Infinity };
 
-  for (const background of ROOM_BACKGROUNDS) {
-    for (const player of PLAYER_COLORS) {
-      const distance = difference(background, player);
-      if (distance < closest.distance) closest = { distance, background, player };
+  for (let i = 0; i < PLAYER_COLORS.length; i += 1) {
+    for (let j = i + 1; j < PLAYER_COLORS.length; j += 1) {
+      const distance = difference(PLAYER_COLORS[i], PLAYER_COLORS[j]);
+      if (distance < closest.distance) {
+        closest = { distance, a: PLAYER_COLORS[i], b: PLAYER_COLORS[j] };
+      }
     }
   }
 
   assert.ok(
     closest.distance >= CLEARLY_DIFFERENT,
-    `${closest.background} is only ${closest.distance.toFixed(1)} from ${closest.player}`,
+    `${closest.a} and ${closest.b} are only ${closest.distance.toFixed(1)} apart`,
   );
 });
 
-test("the solo palette is exactly why rooms needed their own list", () => {
-  // Not a rule being enforced - a fact being recorded. These eight are right
-  // for the one snake that changes colour with them, and wrong under five that
-  // cannot. If this ever stops failing, the two lists could merge again.
-  const collisions = PALETTES.filter((palette) =>
-    PLAYER_COLORS.some((player) => difference(palette.bg, player) < CLEARLY_DIFFERENT),
-  );
-  assert.ok(collisions.length > 0);
+test("there is a colour for every player a room can hold", () => {
+  // `MAX_PLAYERS` in backend/room/room.py. The server hands out an index and
+  // trusts this list to have one for it.
+  assert.equal(PLAYER_COLORS.length, 5);
 });
 
-test("a death visibly changes the room's colour", () => {
-  // Consecutive, and wrapping: the palette advances by one per death, so every
-  // step anyone can see has to look like a step.
-  for (let index = 0; index < ROOM_BACKGROUNDS.length; index += 1) {
-    const here = roomBackgroundAt(index);
-    const next = roomBackgroundAt(index + 1);
-    const distance = difference(here, next);
-    assert.ok(distance >= CLEARLY_DIFFERENT, `${here} -> ${next} is only ${distance.toFixed(1)}`);
-  }
-});
-
-test("room backgrounds are dark enough to carry white type and a white wall", () => {
-  for (const background of ROOM_BACKGROUNDS) {
-    assert.equal(inkOn(background), PAPER, `${background} needs a dark ground`);
-  }
-});
-
-test("room backgrounds are bright enough for the spotlight to show on them", () => {
-  // The light is only as visible as the difference between lit ground and the
-  // same ground under the veil, so a ground can be too dark to light up. Solo's
-  // dimmest pair manages about 35 and reads fine; a first pass at this list sat
-  // around 15 and the spotlight all but vanished.
-  const veiled = (hex) => {
-    const packed = Number.parseInt(hex.slice(1), 16);
-    const dim = (shift) => Math.round(((packed >> shift) & 255) * (1 - 0.9));
-    return `#${[16, 8, 0].map((s) => dim(s).toString(16).padStart(2, "0")).join("")}`;
-  };
-
-  for (const background of ROOM_BACKGROUNDS) {
-    const gap = lab(background)[0] - lab(veiled(background))[0];
-    assert.ok(gap >= 35, `${background} only lifts ${gap.toFixed(1)} out of its own shadow`);
-  }
-});
-
-test("a room's apple inverts with its ground", () => {
-  // Solo is not asked: its apple is black on all eight palettes and always has
-  // been, which is a decision about the art rather than about contrast. This
-  // rule exists so a room's deep grounds can never end up with a black apple
-  // on them.
-  for (const background of ROOM_BACKGROUNDS) assert.equal(inkOn(background), PAPER);
-  assert.equal(inkOn("#FFFFFF"), INK);
-});
-
-test("an out-of-range index still returns a colour", () => {
-  assert.equal(roomBackgroundAt(ROOM_BACKGROUNDS.length), ROOM_BACKGROUNDS[0]);
-  assert.equal(roomBackgroundAt(-1), ROOM_BACKGROUNDS[ROOM_BACKGROUNDS.length - 1]);
+test("the solo palette is untouched", () => {
+  // A room going white says nothing about solo, which still cycles all eight
+  // pairs on its own apples.
+  assert.equal(PALETTES.length, 8);
+  assert.equal(PALETTES[0].bg, "#00D6F0");
 });

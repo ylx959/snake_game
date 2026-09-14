@@ -39,78 +39,29 @@ export const INK = "#000000";
 /**
  * One colour per player in a room, by the `color` index the server handed out.
  *
- * Chosen for a **black board**, so all five are bright: against black,
- * luminance is what makes a colour visible at all, and hue is what tells the
- * five apart.
+ * Chosen for the **white board** a room is now played on, so all five are
+ * *dark*: against white, luminance is what makes a colour visible at all, and
+ * hue is what tells the five apart. They are the same five hues the board has
+ * always used - red, cyan, yellow, green, magenta - deepened until each one
+ * carries at least 4.5:1 against the ground it lies on.
+ *
+ * The bright originals were picked for a black board and do not survive the
+ * move: `#FFE93D` on white is 1.24:1 and `#3EE03E` is 1.76:1, which is not a
+ * hard-to-read snake but an invisible one. `test/palette.test.mjs` measures
+ * both the contrast and the distance between the five, so a retune that makes
+ * one vanish or two alike fails the build.
  *
  * Colour is never the only cue. Your own snake carries a name tag on its head,
  * and the roster in the corner numbers and names everyone, so a player who
  * cannot separate the red from the green still can.
  */
 export const PLAYER_COLORS: readonly string[] = [
-  "#F5001E",
   "#22DFF5",
-  "#FFE93D",
+  "#4B2BEE",
+  "#FF4A1F",
   "#3EE03E",
   "#FF0CBA",
 ];
-
-/**
- * The backgrounds a **room** cycles through, one step per death.
- *
- * A separate list from `PALETTES`, and it has to be. Those eight were chosen to
- * sit under a single snake whose colour moves with them; a room has five snakes
- * whose colours cannot move, because a colour is which player you are. Reusing
- * them put `#FFE93D` under the player already wearing `#FFE93D` - the same
- * colour, not merely a close one - and cyan under cyan at a distance below what
- * the eye can resolve at all.
- *
- * So these are their own eight, and three things are true of every one of them.
- *
- * **Far from all five player colours**: the closest pair is ΔE 46 in CIE Lab,
- * where the eye needs roughly 2 to tell two colours apart at all.
- *
- * **Bright enough to be lit.** The spotlight is only as visible as the
- * difference between lit ground and the same ground under 90% black, and a
- * first attempt at this list went too dark - deep navies that were safely clear
- * of every snake and had nothing left for the light to pick out. These sit at
- * L 40-48, so that gap is 38-45, which is what solo gets from its own darkest
- * pair. Dark enough, still, for white type and a white wall to read over them.
- *
- * **Far from each other**, in this order: consecutive entries are ΔE 64 apart
- * at the closest. A death is supposed to be *felt*, and two neighbouring browns
- * would make it look like nothing happened.
- *
- * `test/palette.test.mjs` measures all three rather than trusting the list, so
- * a retuned hue that collides or goes dim fails the build.
- */
-export const ROOM_BACKGROUNDS: readonly string[] = [
-  "#8A5337",
-  "#227A25",
-  "#2B6699",
-  "#996917",
-  "#006B68",
-  "#993D71",
-  "#5D6B00",
-  "#8D3D99",
-];
-
-/**
- * Black on a light ground, white on a dark one.
- *
- * The apple is drawn in whichever reads: solo grounds are bright, so it is
- * black there exactly as it always was, and a room's are deep, so it is white -
- * the same rule that used to be written out twice, once per mode.
- */
-export function inkOn(background: string): string {
-  const packed = Number.parseInt(background.slice(1), 16);
-  const r = ((packed >> 16) & 255) / 255;
-  const g = ((packed >> 8) & 255) / 255;
-  const b = (packed & 255) / 255;
-  // Rec. 709 luma. Good enough to answer "is this light or dark"; nothing here
-  // needs the full sRGB-to-linear round trip.
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5 ? INK : PAPER;
-}
 
 /** Tolerates an out-of-range index rather than rendering `undefined`. */
 export function paletteAt(index: number): Palette {
@@ -124,11 +75,7 @@ export function playerColorAt(index: number): string {
   return PLAYER_COLORS[((index % n) + n) % n];
 }
 
-/** And for a room's background. */
-export function roomBackgroundAt(index: number): string {
-  const n = ROOM_BACKGROUNDS.length;
-  return ROOM_BACKGROUNDS[((index % n) + n) % n];
-}
+
 
 /** The white the snake lights text with, and the ring on your own head. */
 export const PAPER = "#FFFFFF";

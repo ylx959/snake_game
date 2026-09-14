@@ -59,20 +59,27 @@ export default function Home() {
   // `null` has to drop the style attribute entirely rather than set some
   // neutral pair: an inline custom property beats the stylesheet, so one left
   // behind would pin the theme at whatever the last board was wearing.
-  // Only solo. A room's board is deep rather than bright now - the backgrounds
-  // there have to stay clear of five fixed snake colours - so its screen keeps
-  // the dark theme: white type over a dark board, and the white `.boundary`
-  // marking a wall that kills you in front of four other people.
+  // Solo wears the pair its run has reached. A room's board is white and never
+  // changes, so it needs no pair at all - it only needs the light theme, which
+  // is the stylesheet's default: black type, and a black `.boundary` marking a
+  // wall that kills you in front of four other people.
+  //
+  // `--emboss` is the one token a boardless default would get wrong. It follows
+  // `--fg`, which at the root is still solo's first foreground, so a room's big
+  // type would pick up a red drop shadow it never asked for.
   const palette = phase === "solo" ? paletteAt(session.solo?.palette ?? 0) : null;
+  const onBoard = palette !== null || view?.mode === "group";
 
   return (
     <main
       className="screen"
-      data-theme={palette ? undefined : "dark"}
+      data-theme={onBoard ? undefined : "dark"}
       style={
         palette
           ? ({ "--bg": palette.bg, "--fg": palette.fg } as React.CSSProperties)
-          : undefined
+          : view?.mode === "group"
+            ? ({ "--emboss": "transparent" } as React.CSSProperties)
+            : undefined
       }
     >
       <div
