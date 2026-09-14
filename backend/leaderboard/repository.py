@@ -119,11 +119,21 @@ class SqliteLeaderboardRepository:
             self._connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS solo_scores (
-                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nickname    TEXT    NOT NULL,
-                    score       INTEGER NOT NULL,
-                    achieved_at REAL    NOT NULL
+                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nickname     TEXT    NOT NULL,
+                    nickname_key TEXT    NOT NULL,
+                    score        INTEGER NOT NULL,
+                    achieved_at  REAL    NOT NULL
                 )
+                """
+            )
+            self._migrate_to_one_row_per_player()
+            # One row per player is the table's shape, not a habit of the code
+            # that writes it: the database refuses a second row for a name.
+            self._connection.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS solo_scores_player
+                ON solo_scores (nickname_key)
                 """
             )
             # The one query this table serves, in the order it serves it.
@@ -134,8 +144,71 @@ class SqliteLeaderboardRepository:
                 """
             )
 
+    def _migrate_to_one_row_per_player(self) -> None:
+        """Bring a table written before the one-row rule up to it.
+
+        The table used to be a list of *runs*, so a player who kept restarting
+        filled the board with themselves - their own worse attempts sitting
+        below their best, pushing everyone else down. Now it is a list of
+        players, and this is what an existing file has to go through before the
+        unique index above will build on it.
+
+        Both steps are no-ops on a table that is already in shape, so this runs
+        on every open and costs a `PRAGMA` and one scan of a hundred-odd rows.
+        """
+        columns = {
+            row[1] for row in self._connection.execute("PRAGMA table_info(solo_scores)")
+        }
+        if "nickname_key" not in columns:
+            self._connection.execute(
+                "ALTER TABLE solo_scores ADD COLUMN nickname_key TEXT NOT NULL DEFAULT ''"
+            )
+
+        # Backfilled in Python, not SQL: the key is `str.casefold()`, which is
+        # what every other name comparison in the server uses, and SQLite's
+        # `lower()` only folds ASCII. A nickname may be any printable character.
+        missing = self._connection.execute(
+            "SELECT id, nickname FROM solo_scores WHERE nickname_key = ''"
+        ).fetchall()
+        self._connection.executemany(
+            "UPDATE solo_scores SET nickname_key = ? WHERE id = ?",
+            [(nickname.casefold(), row_id) for row_id, nickname in missing],
+        )
+
+        # Collapse the duplicates the old shape allowed, keeping each player's
+        # best - highest score, and on a tie the one they got there with first.
+        # Done here rather than in SQL because "best" is the same two-key
+        # comparison `top()` sorts by, and stating it once in Python is clearer
+        # than a correlated subquery that has to be read twice to be believed.
+        rows = self._connection.execute(
+            "SELECT id, nickname_key, score, achieved_at FROM solo_scores"
+        ).fetchall()
+
+        best: dict[str, tuple[int, int, float]] = {}
+        for row_id, key, score, achieved_at in rows:
+            current = best.get(key)
+            if current is None or (score, -achieved_at) > (current[1], -current[2]):
+                best[key] = (row_id, score, achieved_at)
+
+        keep = {row_id for row_id, _, _ in best.values()}
+        self._connection.executemany(
+            "DELETE FROM solo_scores WHERE id = ?",
+            [(row[0],) for row in rows if row[0] not in keep],
+        )
+
     def record(self, nickname: str, score: int, achieved_at: float | None = None) -> bool:
-        """Write one finished run. False when the row was not fit to store.
+        """Write one finished run. False when the table did not change.
+
+        **One row per player, holding their best.** A player who finishes a
+        better run moves their own row up the table; a player who finishes a
+        worse one leaves it exactly where it was, rather than appearing twice.
+        The board is a list of players, not a list of runs - a player restarting
+        used to fill it with their own worse attempts and push everyone else
+        down, which said nothing about anybody.
+
+        Keyed on the case-folded name, because that is what the rest of the
+        server means by "the same name": a top-ten nickname is reserved
+        case-insensitively, so nobody else can be playing under it anyway.
 
         Validated rather than trusted, even though the only caller is the
         server's own game-over path: a store that assumes its caller is careful
@@ -150,10 +223,30 @@ class SqliteLeaderboardRepository:
         if not MIN_RECORDED_SCORE <= score <= MAX_SCORE:
             return False
 
+        display = cleaned.nickname[:MAX_NICKNAME]
+        key = display.casefold()
+
         with self._connection:
+            standing = self._connection.execute(
+                "SELECT score FROM solo_scores WHERE nickname_key = ?", (key,)
+            ).fetchone()
+
+            # Equal is not better: leaving the earlier row alone keeps the
+            # timestamp they first reached this score with, and `top()` breaks a
+            # tie by who got there first.
+            if standing is not None and score <= standing[0]:
+                return False
+
             self._connection.execute(
-                "INSERT INTO solo_scores (nickname, score, achieved_at) VALUES (?, ?, ?)",
-                (cleaned.nickname[:MAX_NICKNAME], score, achieved_at or time.time()),
+                """
+                INSERT INTO solo_scores (nickname, nickname_key, score, achieved_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (nickname_key) DO UPDATE SET
+                    nickname    = excluded.nickname,
+                    score       = excluded.score,
+                    achieved_at = excluded.achieved_at
+                """,
+                (display, key, score, achieved_at or time.time()),
             )
         return True
 

@@ -48,18 +48,101 @@ def test_a_tie_goes_to_whoever_got_there_first(store):
     assert [e.nickname for e in store.top()] == ["earlier", "later"]
 
 
-def test_the_same_nickname_may_appear_more_than_once(store):
-    store.record("ylx", 10, achieved_at=100.0)
-    store.record("ylx", 4, achieved_at=200.0)
-    assert [e.score for e in store.top()] == [10, 4]
+def test_a_player_holds_one_row_not_one_per_run(store):
+    """The table is a list of players, not a list of runs.
 
-
-def test_every_run_is_kept_not_just_a_player_best(store):
-    # The table is a list of runs. Nothing here is keyed by name, because a
-    # nickname is not an identity.
+    Restarting used to fill the board with the same person: their worse
+    attempts sat below their best and pushed everybody else down, which said
+    nothing about them and cost everyone else a place.
+    """
     for index in range(1, 6):
         store.record("ylx", index, achieved_at=100.0 + index)
-    assert len(store.top()) == 5
+
+    assert [(e.nickname, e.score) for e in store.top()] == [("ylx", 5)]
+
+
+def test_a_better_run_moves_your_own_row_up(store):
+    store.record("rival", 7, achieved_at=100.0)
+    store.record("ylx", 4, achieved_at=110.0)
+    assert [e.nickname for e in store.top()] == ["rival", "ylx"]
+
+    assert store.record("ylx", 9, achieved_at=200.0) is True
+
+    assert [(e.nickname, e.score) for e in store.top()] == [("ylx", 9), ("rival", 7)]
+
+
+def test_a_worse_run_leaves_your_row_alone(store):
+    store.record("ylx", 10, achieved_at=100.0)
+
+    assert store.record("ylx", 4, achieved_at=200.0) is False
+
+    assert [(e.score, e.achieved_at) for e in store.top()] == [(10, 100.0)]
+
+
+def test_matching_your_own_best_does_not_restart_the_clock(store):
+    """Equal is not better, and the difference decides a tie.
+
+    `top()` puts whoever reached a score first ahead of whoever matched it
+    later. Rewriting the row on an equal run would quietly hand that place to
+    somebody else.
+    """
+    store.record("ylx", 10, achieved_at=100.0)
+    store.record("rival", 10, achieved_at=150.0)
+
+    assert store.record("ylx", 10, achieved_at=200.0) is False
+
+    assert [e.nickname for e in store.top()] == ["ylx", "rival"]
+
+
+def test_the_same_name_in_another_case_is_the_same_player(store):
+    # The same rule the reserved-nickname check uses: a top-ten name is spoken
+    # for case-insensitively, so nobody else can be playing under it.
+    store.record("ylx", 4, achieved_at=100.0)
+    store.record("YLX", 9, achieved_at=200.0)
+
+    assert [(e.nickname, e.score) for e in store.top()] == [("YLX", 9)]
+
+
+def test_an_older_table_of_runs_collapses_to_one_row_per_player(tmp_path):
+    """A file written before the one-row rule is brought up to it on open."""
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    with old:
+        old.execute(
+            """
+            CREATE TABLE solo_scores (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                nickname    TEXT    NOT NULL,
+                score       INTEGER NOT NULL,
+                achieved_at REAL    NOT NULL
+            )
+            """
+        )
+        old.executemany(
+            "INSERT INTO solo_scores (nickname, score, achieved_at) VALUES (?, ?, ?)",
+            [
+                ("ylx", 3, 100.0),
+                ("ylx", 11, 200.0),  # their best, and not the newest
+                ("YLX", 5, 300.0),  # the same player in another case
+                ("rival", 7, 120.0),
+                ("rival", 7, 90.0),  # the same score, reached earlier
+            ],
+        )
+    old.close()
+
+    store = SqliteLeaderboardRepository(path)
+    try:
+        assert [(e.nickname, e.score, e.achieved_at) for e in store.top()] == [
+            ("ylx", 11, 200.0),
+            ("rival", 7, 90.0),
+        ]
+        # And the table now refuses a second row for a name.
+        store.record("ylx", 20, achieved_at=400.0)
+        assert [(e.nickname, e.score) for e in store.top()] == [("ylx", 20), ("rival", 7)]
+    finally:
+        store.close()
 
 
 def test_the_table_is_capped_at_a_hundred(store):

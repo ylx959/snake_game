@@ -134,8 +134,12 @@ or WASD steer and start, Space pauses and resumes, R resets, and an apple grows
 you by one and flips the palette.
 
 When the run ends, **the server** writes the score. There is no client message
-that carries a score, so there is nothing for a browser to inflate; one finished
-run writes exactly one row. Ties are broken by who got there first.
+that carries a score, so there is nothing for a browser to inflate.
+
+The table is a list of **players, not runs**: you hold one row, and it holds
+your best. Beat it and your own row moves up; fall short of it and nothing
+changes. Ties are broken by who got there first, and matching your own best does
+not reset that — the place stays yours from when you first reached it.
 
 A run that ate nothing is not recorded: it is the commonest way to leave the
 board and says nothing about anyone. You are still told what you scored.

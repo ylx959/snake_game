@@ -38,10 +38,6 @@ DEFAULT_TICK_SECONDS = 0.12
 #: one each past four, or a five-player board stops being a contest.
 FOOD_FOR_PLAYERS: dict[int, int] = {1: 1, 2: 2, 3: 3, 4: 4, 5: 4}
 
-#: Shared with the solo game: the browser cycles the same eight pairs.
-PALETTE_COUNT = 8
-
-
 class MultiStatus(str, Enum):
     COUNTDOWN = "countdown"
     RUNNING = "running"
@@ -118,7 +114,6 @@ class MultiplayerGame:
 
         self.status = MultiStatus.COUNTDOWN
         self.ticks = 0
-        self.palette = 0
         self.foods: list[Cell] = []
         self._turned: set[str] = set()
         self._fill_food(FOOD_FOR_PLAYERS.get(len(players), 4))
@@ -151,10 +146,8 @@ class MultiplayerGame:
         """Take a snake off the board outside a tick: a player who left.
 
         Mid-round, leaving is dying, so it goes through exactly what a death in
-        `tick()` goes through - the body comes off the board, the tick it died
-        on is recorded, and the room repaints. Doing it here rather than in
-        `room/` is what keeps "a death changes the colour" one rule in one file
-        instead of two that have to be remembered together.
+        `tick()` goes through - the body comes off the board, and the tick it
+        died on is recorded, which is what `rankings()` reads.
 
         Idempotent, and it has to be: a socket can report its own death more
         than once. Returns whether this call was the one that changed anything.
@@ -164,7 +157,6 @@ class MultiplayerGame:
             return False
         player.alive = False
         player.died_at_tick = self.ticks
-        self.palette = (self.palette + 1) % PALETTE_COUNT
         return True
 
     def turn(self, player_id: str, direction: Direction) -> bool:
@@ -223,12 +215,6 @@ class MultiplayerGame:
             if player.player_id in doomed:
                 player.alive = False
                 player.died_at_tick = self.ticks
-                # Every death repaints the room. An apple is one player's
-                # business and nobody else can see it happen; a death is the
-                # whole room's, and it is the moment everyone wants marked. So
-                # this is the event the shared palette follows. Solo still
-                # turns on eating - there, the apple *is* the whole event.
-                self.palette = (self.palette + 1) % PALETTE_COUNT
 
         self.ticks += 1
 
@@ -393,7 +379,6 @@ class MultiplayerGame:
             "height": self.height,
             "status": self.status.value,
             "ticks": self.ticks,
-            "palette": self.palette,
             "food": [[x, y] for x, y in self.foods],
             "snakes": [
                 {

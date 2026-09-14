@@ -502,14 +502,33 @@ everyone has left. The leaderboard is the only durable state, behind the
 `LeaderboardRepository` Protocol, configured by `DATABASE_URL` alone.
 
 **There is no client message that carries a score.** The only route into the
-leaderboard is a finished, server-run solo game, and one run writes one row —
-unless it scored **0**, which `MIN_RECORDED_SCORE` refuses at the store
-boundary. A run that ate nothing is the commonest way to leave the board and
-says nothing about the player; a table of them buries the scores that mean
-something. The run still finishes, the player is still told what they scored,
-and the name is still spent — it is simply not written down. `SoloScreen` says
-so on the card, because otherwise the player looks for a row that was never
-going to be there.
+leaderboard is a finished, server-run solo game — and it writes nothing at all
+if it scored **0**, which `MIN_RECORDED_SCORE` refuses at the store boundary. A
+run that ate nothing is the commonest way to leave the board and says nothing
+about the player; a table of them buries the scores that mean something. The run
+still finishes, the player is still told what they scored, and the name is still
+spent — it is simply not written down. `SoloScreen` says so on the card, because
+otherwise the player looks for a row that was never going to be there.
+
+**One row per player, holding their best.** The table was a list of runs, and a
+player who kept restarting filled it with themselves: their own worse attempts
+sat below their best and pushed everybody else down a place each. Now a better
+run moves your own row up and a worse one changes nothing. Equal is not better
+either — rewriting the row on a matching run would reset `achieved_at`, and
+`top()` breaks a tie by who got there first, so it would quietly hand your place
+to somebody who matched you later.
+
+The key is `nickname.casefold()`, in its own `nickname_key` column under a
+unique index, so the shape is the database's rule rather than a habit of the
+code that writes it. Folded in Python rather than SQL because a nickname may be
+any printable character and SQLite's `lower()` only folds ASCII — the table
+already holds a full-width `１４`. It matches how the rest of the server compares
+names, and a top-ten name is reserved case-insensitively anyway, so nobody else
+can be playing under it.
+
+`_migrate_to_one_row_per_player()` brings an existing file up to this on open:
+it adds the column, backfills the key, and collapses duplicates to each player's
+best before the unique index is built. Both steps are no-ops once done.
 
 **`solo_enter` opens the solo board; `solo_start` starts it.** They are separate
 messages because the opening pause is part of the game: the board comes back
