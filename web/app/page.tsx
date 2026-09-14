@@ -46,24 +46,31 @@ export default function Home() {
 
   const board = useBoardRect(shape.cols, shape.rows);
 
-  // The palette belongs to a solo run and to nothing else. The server sends an
-  // index; the hex lives in lib/palette.ts. Setting it as custom properties
-  // here repaints the page, the buttons and the canvas together, with no
+  // A screen with a board on it wears that board's palette; every screen that
+  // is only text - loading, the menus, a lobby, the countdown - takes the dark
+  // theme in globals.css instead. The server sends an index, never a colour;
+  // the hex lives in lib/palette.ts.
+  //
+  // Both modes send one, and each decides for itself when it turns: solo on
+  // every apple, a room on every death. Setting the pair as custom properties
+  // here repaints the page, the readouts and the canvas together, with no
   // transition - the flip is meant to be abrupt.
   //
-  // Every other screen - loading, the menus, a lobby, a shared board, a result -
-  // takes the dark theme in globals.css: black ground, white type, no palette.
-  // The style attribute has to be dropped entirely for those, not set to some
-  // neutral pair: an inline custom property beats the stylesheet, so leaving
-  // one behind would pin the theme at whatever the last solo run was wearing.
-  const palette = paletteAt(session.solo?.palette ?? 0);
+  // `null` has to drop the style attribute entirely rather than set some
+  // neutral pair: an inline custom property beats the stylesheet, so one left
+  // behind would pin the theme at whatever the last board was wearing.
+  // Only solo. A room's board is deep rather than bright now - the backgrounds
+  // there have to stay clear of five fixed snake colours - so its screen keeps
+  // the dark theme: white type over a dark board, and the white `.boundary`
+  // marking a wall that kills you in front of four other people.
+  const palette = phase === "solo" ? paletteAt(session.solo?.palette ?? 0) : null;
 
   return (
     <main
       className="screen"
-      data-theme={phase === "solo" ? undefined : "dark"}
+      data-theme={palette ? undefined : "dark"}
       style={
-        phase === "solo"
+        palette
           ? ({ "--bg": palette.bg, "--fg": palette.fg } as React.CSSProperties)
           : undefined
       }
@@ -124,20 +131,21 @@ export default function Home() {
             />
           )}
 
-          {(phase === "countdown" || phase === "playing") && session.group && (
+          {phase === "playing" && session.group && (
             <GroupGameScreen
               state={session.group}
               view={view}
               me={session.me}
               you={session.you}
               connection={session.connection}
-              countdown={session.countdown}
             />
           )}
 
-          {/* The countdown lands before the first board does, so it needs a
-              screen of its own for those few hundred milliseconds. */}
-          {phase === "countdown" && !session.group && (
+          {/* Every countdown gets this screen, not only the first. There is no
+              board to stand on: the reducer drops the previous round along with
+              the countdown, so a rematch opens exactly as the first round did
+              rather than counting down over a stale room. */}
+          {phase === "countdown" && (
             <div className="screenful">
               <p className="countdown countdown--inline">{session.countdown}</p>
               <p className="lede">Everybody starts together</p>

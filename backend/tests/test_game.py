@@ -22,7 +22,7 @@ def test_a_new_game_is_ready_with_food_on_the_board():
 
 def test_a_new_game_advances_on_a_100ms_clock():
     game = new_game()
-    assert game.tick_seconds == 0.10
+    assert game.tick_seconds == 0.12
 
 
 def test_nothing_advances_while_the_game_is_not_running():

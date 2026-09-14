@@ -31,7 +31,7 @@ from .collision import hits_self, hits_wall
 from .snake import Cell, Direction, Snake
 from .spawns import MULTI_HEIGHT, MULTI_WIDTH, spawns_for
 
-DEFAULT_TICK_SECONDS = 0.10
+DEFAULT_TICK_SECONDS = 0.12
 
 #: How many apples are on the board, by player count. More snakes means more
 #: competition for the same cell, so the board gets more to go round - but not
@@ -147,6 +147,26 @@ class MultiplayerGame:
 
     # --- commands from a player -------------------------------------------
 
+    def kill(self, player_id: str) -> bool:
+        """Take a snake off the board outside a tick: a player who left.
+
+        Mid-round, leaving is dying, so it goes through exactly what a death in
+        `tick()` goes through - the body comes off the board, the tick it died
+        on is recorded, and the room repaints. Doing it here rather than in
+        `room/` is what keeps "a death changes the colour" one rule in one file
+        instead of two that have to be remembered together.
+
+        Idempotent, and it has to be: a socket can report its own death more
+        than once. Returns whether this call was the one that changed anything.
+        """
+        player = self.players.get(player_id)
+        if player is None or not player.alive:
+            return False
+        player.alive = False
+        player.died_at_tick = self.ticks
+        self.palette = (self.palette + 1) % PALETTE_COUNT
+        return True
+
     def turn(self, player_id: str, direction: Direction) -> bool:
         """Buffer a heading for the next tick. True when it was taken.
 
@@ -203,12 +223,17 @@ class MultiplayerGame:
             if player.player_id in doomed:
                 player.alive = False
                 player.died_at_tick = self.ticks
+                # Every death repaints the room. An apple is one player's
+                # business and nobody else can see it happen; a death is the
+                # whole room's, and it is the moment everyone wants marked. So
+                # this is the event the shared palette follows. Solo still
+                # turns on eating - there, the apple *is* the whole event.
+                self.palette = (self.palette + 1) % PALETTE_COUNT
 
         self.ticks += 1
 
         for player_id, cell in eaten.items():
             self.players[player_id].score += 1
-            self.palette = (self.palette + 1) % PALETTE_COUNT
             self.foods.remove(cell)
         if eaten:
             self._fill_food(FOOD_FOR_PLAYERS.get(len(self.order), 4))

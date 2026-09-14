@@ -118,12 +118,11 @@ class GameRoom:
         session.ready = False
 
         # Mid-round, leaving is dying. The round carries on for everyone else,
-        # and the body comes off the board like any other death.
-        if self.game is not None and player_id in self.game.players:
-            player = self.game.players[player_id]
-            if player.alive:
-                player.alive = False
-                player.died_at_tick = self.game.ticks
+        # and the body comes off the board like any other death - including the
+        # colour change, which is why this asks the game rather than reaching
+        # into the snake itself.
+        if self.game is not None:
+            self.game.kill(player_id)
 
         if self.host_id == player_id:
             # The earliest joiner still here. `players` is insertion ordered,

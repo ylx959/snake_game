@@ -55,6 +55,53 @@ export const PLAYER_COLORS: readonly string[] = [
   "#FF0CBA",
 ];
 
+/**
+ * The backgrounds a **room** cycles through, one step per death.
+ *
+ * A separate list from `PALETTES`, and it has to be. Those eight were chosen to
+ * sit under a single snake whose colour moves with them; a room has five snakes
+ * whose colours cannot move, because a colour is which player you are. Reusing
+ * them put `#FFE93D` under the player already wearing `#FFE93D` - the same
+ * colour, not merely a close one - and cyan under cyan at a distance below what
+ * the eye can resolve at all.
+ *
+ * So these are deep and desaturated, and every one of them is far from all five
+ * player colours in CIE Lab: the closest pair is about ΔE 60, where the eye
+ * needs roughly 2 to tell two colours apart. `test/palette.test.mjs` measures
+ * it rather than trusting the list, so a retuned hue that collides fails.
+ *
+ * They are ordered so consecutive entries are far apart too (ΔE 40 at the
+ * closest). A death is supposed to be *felt*, and two neighbouring browns would
+ * make it look like nothing happened.
+ */
+export const ROOM_BACKGROUNDS: readonly string[] = [
+  "#14235A",
+  "#3B5E0E",
+  "#5C1033",
+  "#0E3B5E",
+  "#4A1260",
+  "#0E5E3B",
+  "#454055",
+  "#5E2A0E",
+];
+
+/**
+ * Black on a light ground, white on a dark one.
+ *
+ * The apple is drawn in whichever reads: solo grounds are bright, so it is
+ * black there exactly as it always was, and a room's are deep, so it is white -
+ * the same rule that used to be written out twice, once per mode.
+ */
+export function inkOn(background: string): string {
+  const packed = Number.parseInt(background.slice(1), 16);
+  const r = ((packed >> 16) & 255) / 255;
+  const g = ((packed >> 8) & 255) / 255;
+  const b = (packed & 255) / 255;
+  // Rec. 709 luma. Good enough to answer "is this light or dark"; nothing here
+  // needs the full sRGB-to-linear round trip.
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5 ? INK : PAPER;
+}
+
 /** Tolerates an out-of-range index rather than rendering `undefined`. */
 export function paletteAt(index: number): Palette {
   const n = PALETTES.length;
@@ -65,6 +112,12 @@ export function paletteAt(index: number): Palette {
 export function playerColorAt(index: number): string {
   const n = PLAYER_COLORS.length;
   return PLAYER_COLORS[((index % n) + n) % n];
+}
+
+/** And for a room's background. */
+export function roomBackgroundAt(index: number): string {
+  const n = ROOM_BACKGROUNDS.length;
+  return ROOM_BACKGROUNDS[((index % n) + n) % n];
 }
 
 /** The white the snake lights text with, and the ring on your own head. */

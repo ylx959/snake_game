@@ -133,7 +133,16 @@ function reduce(state: SessionState, message: ServerMessage): SessionState {
     }
 
     case "countdown":
-      return { ...state, phase: "countdown", countdown: message.seconds, rankings: null };
+      // The board goes with it. Every countdown is the first one: without
+      // clearing `group`, a second round would count down over the previous
+      // round's roster, score and name tag instead of the standalone screen.
+      return {
+        ...state,
+        phase: "countdown",
+        countdown: message.seconds,
+        group: null,
+        rankings: null,
+      };
 
     case "game_state":
       return { ...state, phase: "playing", group: message, countdown: null };
@@ -204,10 +213,12 @@ export function useGameSession(url: string = DEFAULT_URL) {
   const view: BoardView | null = useMemo(() => {
     if (state.phase === "solo" && state.solo) return { mode: "solo", state: state.solo };
     if (state.group && (state.phase === "playing" || state.phase === "results")) {
-      return { mode: "group", state: state.group };
+      // `you` rides along because a shared board is drawn differently for each
+      // player: the fog in `lib/vision.ts` is measured from your own head.
+      return { mode: "group", state: state.group, you: state.you };
     }
     return null;
-  }, [state.phase, state.solo, state.group]);
+  }, [state.phase, state.solo, state.group, state.you]);
 
   /** Your own snake on a shared board, or null in solo and in the menus. */
   const me = useMemo(

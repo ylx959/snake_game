@@ -29,14 +29,12 @@ export function GroupGameScreen({
   me,
   you,
   connection,
-  countdown,
 }: {
   state: MultiplayerState;
   view: BoardView | null;
   me: SnakeView | null;
   you: string | null;
   connection: ConnectionStatus;
-  countdown: number | null;
 }) {
   const spectating = me !== null && !me.alive;
 
@@ -68,13 +66,7 @@ export function GroupGameScreen({
 
       <NameTag snake={me} cols={state.width} rows={state.height} />
 
-      {countdown !== null && (
-        <p className="countdown" role="status">
-          <LitText view={view}>{countdown}</LitText>
-        </p>
-      )}
-
-      {countdown === null && spectating && (
+      {spectating && (
         <p className="prompt">
           <LitText view={view}>Spectating</LitText>
         </p>
@@ -83,11 +75,9 @@ export function GroupGameScreen({
       <div className="ui__gap" />
 
       <Hint view={view}>
-        {countdown !== null
-          ? "Pick a direction · nobody moves until zero"
-          : spectating
-            ? "You are out · watching until the round ends"
-            : "Arrows / WASD to steer · last snake alive wins"}
+        {spectating
+          ? "You are out · watching until the round ends"
+          : "Arrows / WASD to steer · last snake alive wins"}
       </Hint>
     </>
   );

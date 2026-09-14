@@ -111,13 +111,17 @@ Two places bend that rule, both deliberately:
   `__init__` and nowhere else — so restarting a run keeps the colours and only a
   new connection starts from pair 0.
 
-  **Only a solo run paints it.** Loading, the menus, a lobby, a shared board and
-  a result are black ground and white type — `page.tsx` sets `data-theme="dark"`
-  on `.screen` for every phase but `solo`, and `globals.css` inverts the same
-  five tokens rather than restating any rule. `MultiplayerGame` still advances a
-  room's shared `palette` and still sends it, and the `multiplayer` tests still
-  pin that: it is a fact about the room, and painting it again is a one-line
-  change in `Renderer.draw`. The browser currently ignores it.
+  **Both boards paint it; only the trigger differs.** Solo turns on every apple.
+  A room turns on every **death** — an apple is one player's business and nobody
+  else can see it happen, while a death is the whole room's, and it is the
+  moment everyone wants marked. `MultiplayerGame.kill()` carries the same rule
+  for a player who leaves mid-round, so "a death repaints the room" is one rule
+  in one file rather than two that have to be remembered together.
+
+  A screen showing a board wears that board's pair; the text-only screens —
+  loading, the menus, a lobby, the countdown — take `data-theme="dark"` in
+  `globals.css`, which inverts the same five tokens rather than restating any
+  rule.
 
   Two traps in that theme block. `--void` is *not* redefined for the dark theme —
   it is the letterbox, and following `--ink` would turn it white around the
@@ -282,12 +286,19 @@ Rendering details that are load-bearing:
   store still held the old picture. `Renderer.clear()` resets the transform
   before clearing: `draw` leaves a device-pixel-ratio scale on the context, and
   clearing through it would wipe only the top-left corner on a retina display.
-- **A shared board is black, and that is what makes its colours work.** An
-  earlier version cycled the palette there too, and a cyan snake on the cyan
-  board was very nearly invisible — the eight backgrounds cover the whole hue
-  circle, so no five player colours can stay clear of all of them. A fixed black
-  ground fixes it at the source: all five read against it, in every round. The
-  apple inverts with the ground — white there, black on a palette.
+- **A shared board wears the palette, and `PLAYER_COLORS` was not chosen for
+  it.** The five player colours were picked against black, where luminance alone
+  separates them; the eight backgrounds cover the whole hue circle, so some pair
+  of them always collides. Concretely: palette 0's `#00D6F0` sits under player
+  1's `#22DFF5`, and 0 is where every round starts. A room only advances on a
+  death, so a five-player round reaches index 4 at most and the exact clash at
+  index 7 (`#FFE93D`, which *is* player 2's colour) is out of reach — but the
+  near ones are not. The fix, when it bites, is `web/lib/palette.ts`: retune the
+  offending background, or give rooms their own list. That file exists so a hue
+  can move without touching the backend.
+
+  The apple is black on both boards now, for the reason it always was: black is
+  the one colour legible on all eight backgrounds.
 - **A shared board draws its snakes exactly as solo does**: same hard square,
   same black eyes. Only the fill differs, and only because five snakes have to
   be told apart. A room is meant to look like the game, not like a different one.
@@ -301,13 +312,68 @@ Rendering details that are load-bearing:
   `docs/superpowers/` still holds the 2026-09-10 plan and spec for the rounded
   version; those are a dated record of a decision since reversed, not a
   description of the code.
-- **`.boundary` is the white frame around a shared board**, and it is a
+- **Two separate things: the cull decides what *exists*, the spotlight decides
+  how *bright* it is.** `lib/vision.ts` holds the first and only the first - a
+  cell is drawn or it is not, and it never returns a brightness. Mixing them is
+  what made an opponent at the edge of vision get dimmed twice, once for being
+  far away and again by the dark it was standing in.
+
+  The cull is one hard edge: an opponent cell further than
+  `ENEMY_VISIBILITY_RADIUS_CELLS` (5) from your head is not drawn at all, at any
+  opacity, because a very faint snake is still a snake on a screen somebody is
+  staring at. Distances are compared squared; nothing in that file calls
+  `Math.sqrt`.
+
+- **The spotlight is a real `createRadialGradient`, never a mask built out of
+  cells.** The board is a grid and the snake is hard squares, but light is not
+  square: painting the shadow cell by cell put a staircase around the circle and
+  banded the falloff, and no amount of tuning the steps fixes a staircase. The
+  radii are the only thing measured in cells, and only to turn them into pixels;
+  the circle is centred on the head cell's exact pixel centre.
+  `imageSmoothingEnabled = false` stays off for the pixel art and does not touch
+  gradients. Beyond its end circle a radial gradient keeps painting its last
+  stop, so one `fillRect` over the whole board leaves everything past the outer
+  radius at the same steady dark with no second pass.
+
+  Two of `VEIL_STOPS`' five stops are the radii doing their job rather than free
+  parameters: the shadow starts exactly at `FULL_LIGHT_RADIUS_CELLS` and reaches
+  its darkest exactly at `ENEMY_VISIBILITY_RADIUS_CELLS`, so the edge of the
+  light and the edge of what exists are the same circle. It stops at 0.88 rather
+  than 1 - a board that went absolutely black would lose the walls along with
+  the snakes.
+
+- **Draw order is the effect.** Ground, then every snake and every eye, then the
+  spotlight over all of it, then the apples painted back on top. Drawing the
+  board whole *before* shadowing it is what makes your own snake fade along its
+  length instead of being exempt from the dark it lies in - the light follows
+  the head alone, and the body is lit by it rather than carrying one of its own.
+  The apples are the single exception, and re-drawing them last is what makes
+  "food is never hidden" true at any distance. Nothing else is drawn after the
+  shadow — and an apple is redrawn **with its own cell of lit ground under it**,
+  because it is black and painting a black square onto the near-black far side
+  of the board is painting nothing. In the light that patch is the colour
+  already there and shows as nothing; only the far apples read as glowing.
+
+  `soloFocus` lights **only RUNNING**. The dark is the difficulty, and difficulty
+  only applies while the game is being played: on READY you are still reading
+  the board, PAUSED you have stopped playing, and GAME_OVER is a record — a
+  record you cannot read is no record. `visionFocus` drops the light for a
+  spectator for the same reason: they are out, so there is nothing left to hide
+  from them.
+
+  **This is appearance, not enforcement.** The server still sends every snake's
+  cells to everybody, so the fog hides opponents from the *player*, not from the
+  browser. Making it a real rule means filtering per player in
+  `MultiplayerGame.to_dict()`.
+
+- **`.boundary` is the frame around a shared board**, and it is a
   `box-shadow: inset`, not a `border`. A border takes layout: under
   `box-sizing: border-box` the canvas stops being exactly `.stage`, and once
   `fitBoard()`'s whole-pixel grid loses a pixel or two the cells stop being
-  square. Solo needs no such line — its ground is a palette colour, so the edge
-  of the board is the edge of the colour. A black board on a black page has no
-  visible wall at all.
+  square. It draws in `--ink`, so it followed the board to black when the room
+  took the palette. Solo needs no such line: its board is small enough and its
+  walls are only ever your own problem, while a room's wall kills you in front
+  of four other people.
 - **Your own snake is found by a name tag, not a marker on the board**
   (`components/game/NameTag.tsx`). A white ring round the head only says "this
   one is yours" to somebody who already knew to look for it. The tag positions

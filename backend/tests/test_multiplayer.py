@@ -112,7 +112,7 @@ def test_a_new_game_is_counting_down_and_nothing_moves():
 
 def test_a_new_room_game_advances_on_a_100ms_clock():
     game = new_game()
-    assert game.tick_seconds == 0.10
+    assert game.tick_seconds == 0.12
 
 
 def test_a_direction_pressed_during_the_countdown_is_held_not_played():
@@ -317,7 +317,13 @@ def test_eating_scores_grows_and_replaces_the_apple():
     assert len(game.foods) == FOOD_FOR_PLAYERS[2]
 
 
-def test_any_players_apple_advances_the_shared_palette():
+def test_an_apple_leaves_the_shared_palette_alone():
+    """Eating is a private event on a shared board.
+
+    Nobody else can see you take an apple, so turning the whole room a new
+    colour for it tells four other players something they cannot check. The
+    solo game still flips on every apple - there, the apple is the whole event.
+    """
     game = running(width=24, height=12)
     place(game, "p1", (5, 8), Direction.RIGHT)
     game.foods = [(6, 8)]
@@ -325,22 +331,59 @@ def test_any_players_apple_advances_the_shared_palette():
 
     game.tick()
 
-    assert game.palette == 1
+    assert game.palette == 0
     assert game.players["p1"].score == 1
     assert game.players["p0"].score == 0
 
 
-def test_two_apples_eaten_in_one_tick_advance_the_palette_twice():
+def test_a_death_advances_the_shared_palette():
     game = running(width=24, height=12)
-    place(game, "p0", (5, 4), Direction.RIGHT)
+    place(game, "p0", (23, 4), Direction.RIGHT)  # one step from the wall
     place(game, "p1", (5, 8), Direction.RIGHT)
-    game.foods = [(6, 4), (6, 8)]
+    assert game.palette == 0
 
     game.tick()
 
+    assert game.players["p0"].alive is False
+    assert game.palette == 1
+
+
+def test_two_deaths_in_one_tick_advance_the_palette_twice():
+    """A head-on kills both, and the room turns twice for it.
+
+    Two deaths on one tick land on the screen as a single change of colour, so
+    which of the two rules applies is invisible in play. Counting each death is
+    the one that can be stated without an exception.
+    """
+    game = running(width=24, height=12)
+    place(game, "p0", (5, 4), Direction.RIGHT)
+    place(game, "p1", (7, 4), Direction.LEFT)
+
+    game.tick()
+
+    assert game.players["p0"].alive is False
+    assert game.players["p1"].alive is False
     assert game.palette == 2
-    assert game.players["p0"].score == 1
-    assert game.players["p1"].score == 1
+
+
+def test_a_player_who_leaves_mid_round_repaints_the_room():
+    game = running(width=24, height=12)
+    assert game.palette == 0
+
+    assert game.kill("p1") is True
+
+    assert game.players["p1"].alive is False
+    assert game.players["p1"].died_at_tick == game.ticks
+    assert game.palette == 1
+
+
+def test_killing_the_same_player_twice_changes_nothing():
+    """A socket can report its own death more than once."""
+    game = running(width=24, height=12)
+    game.kill("p1")
+
+    assert game.kill("p1") is False
+    assert game.palette == 1
 
 
 def test_an_apple_two_snakes_reach_together_is_eaten_by_neither():
