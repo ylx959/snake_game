@@ -16,7 +16,7 @@
 
 import { useEffect, useRef, useState, type ComponentPropsWithoutRef, type RefObject } from "react";
 
-import { cellEdges, roundedRectPath, snakeCellRadius } from "@/lib/board";
+import { cellEdges, cellRectPath } from "@/lib/board";
 import { boardShape, litCells, type BoardView } from "@/lib/renderer";
 
 /** A zero-area path: clips the white copy away entirely. */
@@ -55,12 +55,11 @@ function useSnakeClip(ref: RefObject<HTMLElement | null>, view: BoardView | null
       .map(([x, y]) => {
         const [left, width] = cellEdges(x, cellWidth);
         const [top, height] = cellEdges(y, cellHeight);
-        return roundedRectPath(
+        return cellRectPath(
           board.left + left - box.left,
           board.top + top - box.top,
           width,
           height,
-          snakeCellRadius(width, height),
         );
       })
       .join("");

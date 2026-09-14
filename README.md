@@ -157,7 +157,7 @@ After a synchronised `3 · 2 · 1`, every snake starts at once on one 64x36 boar
 Each player gets a colour the server hands out. The board is black, with a white
 frame marking the walls: the palette cycling belongs to a solo run, and one
 fixed ground is what lets five player colours be told apart the same way in
-every round. The snakes are drawn exactly as solo draws its own - same rounded
+every round. The snakes are drawn exactly as solo draws its own - same square
 segments, same eyes - so a room looks like the game rather than like a different
 one. Your own carries a small name tag on its head, and the corner roster
 numbers and names everyone, so telling the snakes apart never depends on telling

@@ -18,32 +18,21 @@ export interface BoardRect {
   cell: number;
 }
 
-/** Corner radius shared by the painted snake and its DOM text mask. */
-export const SNAKE_CELL_RADIUS_RATIO = 0.15;
-
-/** A subtle radius based on the shorter side of a rendered snake cell. */
-export function snakeCellRadius(width: number, height: number): number {
-  return Math.min(width, height) * SNAKE_CELL_RADIUS_RATIO;
-}
-
-/** An SVG path whose circular corners match Canvas 2D's `roundRect`. */
-export function roundedRectPath(
-  left: number,
-  top: number,
-  width: number,
-  height: number,
-  radius: number,
-): string {
-  const right = left + width;
-  const bottom = top + height;
-
-  return [
-    `M${left + radius} ${top}`,
-    `H${right - radius}A${radius} ${radius} 0 0 1 ${right} ${top + radius}`,
-    `V${bottom - radius}A${radius} ${radius} 0 0 1 ${right - radius} ${bottom}`,
-    `H${left + radius}A${radius} ${radius} 0 0 1 ${left} ${bottom - radius}`,
-    `V${top + radius}A${radius} ${radius} 0 0 1 ${left + radius} ${top}Z`,
-  ].join("");
+/**
+ * One cell as an SVG path: a plain rectangle, square on every corner.
+ *
+ * The snake is drawn as hard squares, so this is what `LitText` masks with -
+ * the mask and the paint have to be the same silhouette or the white text sits
+ * visibly off the snake, which is the whole reason this lives here rather than
+ * in either of the two files that use it.
+ *
+ * Each cell is its own closed subpath. Several of them concatenated make one
+ * `path()` covering the whole snake: `clip-path` fills with the nonzero rule,
+ * so adjacent rectangles union instead of cancelling, and neighbours that share
+ * an edge leave no seam - `cellEdges()` has already made them share it exactly.
+ */
+export function cellRectPath(left: number, top: number, width: number, height: number): string {
+  return `M${left} ${top}H${left + width}V${top + height}H${left}Z`;
 }
 
 /**

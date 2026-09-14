@@ -1,17 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { roundedRectPath, snakeCellRadius } from "../lib/board.ts";
+import { cellRectPath } from "../lib/board.ts";
 
-test("snake cell radius scales from the shorter side", () => {
-  assert.equal(snakeCellRadius(50, 40), 6);
-  assert.equal(snakeCellRadius(40, 50), 6);
-  assert.equal(snakeCellRadius(25, 20), 3);
+test("a cell path closes around all four edges", () => {
+  assert.equal(cellRectPath(10, 20, 50, 40), "M10 20H60V60H10Z");
 });
 
-test("rounded rectangle path follows all four cell edges with equal corner arcs", () => {
-  assert.equal(
-    roundedRectPath(10, 20, 50, 40, 3.2),
-    "M13.2 20H56.8A3.2 3.2 0 0 1 60 23.2V56.8A3.2 3.2 0 0 1 56.8 60H13.2A3.2 3.2 0 0 1 10 56.8V23.2A3.2 3.2 0 0 1 13.2 20Z",
-  );
+test("neighbouring cells share an edge exactly, so they leave no seam", () => {
+  // The mask is one `path()` of many cells; two that touch must agree on the
+  // boundary between them or a hairline of the wrong colour shows through.
+  assert.equal(cellRectPath(0, 0, 10, 10), "M0 0H10V10H0Z");
+  assert.equal(cellRectPath(10, 0, 10, 10), "M10 0H20V10H10Z");
 });

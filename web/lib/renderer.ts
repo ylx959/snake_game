@@ -8,7 +8,7 @@
  * font rather than something this file has to reimplement with `fillText`.
  */
 
-import { cellEdges, snakeCellRadius } from "@/lib/board";
+import { cellEdges } from "@/lib/board";
 import { INK, PAPER, paletteAt, playerColorAt } from "@/lib/palette";
 import type { Cell, Direction, GameState, MultiplayerState } from "@/types/game";
 
@@ -141,7 +141,7 @@ export class Renderer {
     const { fg } = paletteAt(state.palette);
 
     if (state.food) this.fillCell(state.food, INK, FOOD_INSET);
-    for (const cell of state.snake) this.fillSnakeCell(cell, fg);
+    for (const cell of state.snake) this.fillCell(cell, fg);
     if (state.snake.length > 0) this.drawEyes(state.snake[0], state.direction);
   }
 
@@ -153,17 +153,17 @@ export class Renderer {
     // the ground, so it inverts with it.
     for (const cell of state.food) this.fillCell(cell, PAPER, FOOD_INSET);
 
-    // Exactly the same segment as solo draws: the same rounded rectangle, the
-    // same radius, the same black eyes on the head. Only the fill differs, and
-    // only because five snakes have to be told apart. A shared board is meant
-    // to look like the game, not like a different one.
+    // Exactly the same segment as solo draws: the same hard square, the same
+    // black eyes on the head. Only the fill differs, and only because five
+    // snakes have to be told apart. A shared board is meant to look like the
+    // game, not like a different one.
     //
     // Bodies first, then every head's eyes, so a head another snake is drawn
     // over still shows which way it was looking.
     for (const snake of state.snakes) {
       if (!snake.alive) continue; // a dead snake is off the board
       const color = playerColorAt(snake.color);
-      for (const cell of snake.cells) this.fillSnakeCell(cell, color);
+      for (const cell of snake.cells) this.fillCell(cell, color);
     }
 
     for (const snake of state.snakes) {
@@ -210,23 +210,21 @@ export class Renderer {
     }
   }
 
-  private fillCell(cell: Cell, color: string, inset: number): void {
+  /**
+   * One cell, filled. A snake segment takes the whole cell (`inset` 0); the
+   * apple is inset so it reads as an object rather than a wall tile.
+   *
+   * `fillRect` with no rounding anywhere: the edges `bounds()` hands back are
+   * whole pixels and neighbours share them exactly, so segments tile with no
+   * seam and nothing on the snake is ever antialiased.
+   */
+  private fillCell(cell: Cell, color: string, inset = 0): void {
     const [left, top, width, height] = this.bounds(cell);
     const padX = Math.round(width * inset);
     const padY = Math.round(height * inset);
 
     this.ctx.fillStyle = color;
     this.ctx.fillRect(left + padX, top + padY, width - padX * 2, height - padY * 2);
-  }
-
-  /** A snake segment with subtle rounding shared by its DOM text mask. */
-  private fillSnakeCell(cell: Cell, color: string): void {
-    const [left, top, width, height] = this.bounds(cell);
-
-    this.ctx.fillStyle = color;
-    this.ctx.beginPath();
-    this.ctx.roundRect(left, top, width, height, snakeCellRadius(width, height));
-    this.ctx.fill();
   }
 
   /**

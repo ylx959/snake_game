@@ -288,10 +288,19 @@ Rendering details that are load-bearing:
   circle, so no five player colours can stay clear of all of them. A fixed black
   ground fixes it at the source: all five read against it, in every round. The
   apple inverts with the ground — white there, black on a palette.
-- **A shared board draws its snakes exactly as solo does**: same rounded
-  rectangle, same radius, same black eyes. Only the fill differs, and only
-  because five snakes have to be told apart. A room is meant to look like the
-  game, not like a different one.
+- **A shared board draws its snakes exactly as solo does**: same hard square,
+  same black eyes. Only the fill differs, and only because five snakes have to
+  be told apart. A room is meant to look like the game, not like a different one.
+- **Snake cells are square, and drawn with `fillRect`.** They had a corner
+  radius for a while; `cellRectPath()` in `lib/board.ts` is what is left of that
+  seam, and it still has to exist: the canvas paints the snake and `LitText`
+  masks the white text with the same silhouette, so a difference of even one
+  rounded corner puts the lit text visibly off the snake. Squares also mean
+  nothing on the snake is antialiased — `bounds()` hands back whole-pixel edges
+  that neighbours share exactly, so segments tile seamlessly.
+  `docs/superpowers/` still holds the 2026-09-10 plan and spec for the rounded
+  version; those are a dated record of a decision since reversed, not a
+  description of the code.
 - **`.boundary` is the white frame around a shared board**, and it is a
   `box-shadow: inset`, not a `border`. A border takes layout: under
   `box-sizing: border-box` the canvas stops being exactly `.stage`, and once
