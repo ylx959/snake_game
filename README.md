@@ -1,210 +1,135 @@
 # Snake Game — retro ’90s style
 
-A server-authoritative snake game, solo or five at a time. A Python game server
-owns every rule and runs the clock; the browser draws the state it is sent and
-forwards key presses. The board is the page - it fills the window, a spotlight
-follows your head and the rest of the board falls into shadow, and on a solo run
-every apple flips the whole screen, background and snake alike, to the next
-colour pair.
+Server-authoritative snake, solo or five at a time. Every rule lives in the
+Python backend, which also runs the clock; the browser draws the state it is
+sent and forwards key presses, and holds no game logic of its own.
 
 ## Highlights
 
-- Authoritative Python game loop: the server owns movement, food, scoring, death and the tick rate
-- **Solo**: one snake on a 48x27 board, with a leaderboard the server writes itself
-- **Group**: up to five snakes on one shared 64x36 board, one room, one clock, last one standing
-- A spotlight on the head: the board fades to near black eight cells out, and in a room an opponent more than five cells away is not drawn at all
-- Kahoot-style six-character room codes, with no accounts, passwords or email anywhere
+- **Solo**: one snake on 48x27, with a leaderboard the server writes itself
+- **Group**: up to five snakes on a shared 64x36 board, joined by a six-character room code, one clock, last one standing
+- A spotlight on the head: the board fades to near black eight cells out, and in a room an opponent past five cells is not drawn at all
 - Every death on a shared board decided before any snake moves, so message order cannot matter
-- Full-bleed canvas board, letterboxed to a fixed 16:9 grid at any window size
-- Whole-screen palette cycling on a solo run, driven by a server-sent index; a room is a fixed white board and every text screen is black
-- Readouts that turn white wherever a snake passes behind them, via a `clip-path` mask over duplicated text
-- Keyboard control matched on physical key position, with Space and R routed through the on-screen buttons
+- Full-bleed canvas letterboxed to 16:9 at any window size, cycling palettes on a solo run and fixed white in a room
 - 346 backend tests grouped by marker, covering the rules without a socket or an event loop
 
 ## Built with
 
-- [Python](https://www.python.org/) 3.11+ with [FastAPI](https://fastapi.tiangolo.com/) and [uvicorn](https://www.uvicorn.org/)
-- [pytest](https://docs.pytest.org/), and SQLite through the standard library
-- [Next.js](https://nextjs.org/) 16 App Router and [React](https://react.dev/) 19
-- [TypeScript](https://www.typescriptlang.org/), Canvas 2D, and hand-written CSS
+- [Python](https://www.python.org/) 3.11+, [FastAPI](https://fastapi.tiangolo.com/), [uvicorn](https://www.uvicorn.org/)
+- [pytest](https://docs.pytest.org/), and SQLite from the standard library
+- [Next.js](https://nextjs.org/) 16 App Router, [React](https://react.dev/) 19
+- [TypeScript](https://www.typescriptlang.org/), Canvas 2D, hand-written CSS
 
 ## Local Development
 
-Both servers must be running. Use two terminals.
+Both servers must run. Use two terminals.
 
-The game server needs Python 3.11+ and four pinned dependencies in a virtualenv:
+Backend — Python 3.11+, four pinned dependencies:
 
 ```bash
 cd backend
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-./dev.sh
+./dev.sh                  # ws://127.0.0.1:8000/ws
 ```
 
-The game server runs on:
-
-```text
-ws://127.0.0.1:8000/ws
-```
-
-`./dev.sh` is `uvicorn --reload`; `PORT=9000 ./dev.sh` moves it, and
+`./dev.sh` is `uvicorn --reload`. `PORT=9000 ./dev.sh` moves it;
 `.venv/bin/python main.py` runs it without reload.
 
-The front end needs Node 20+:
+Front end — Node 20+:
 
 ```bash
 cd web
 npm install
-npm run dev
-```
-
-The local development server runs on:
-
-```text
-http://127.0.0.1:3000
-```
-
-The game server binds **loopback only**, so use `127.0.0.1`, not `localhost` -
-on macOS `localhost` may resolve to `::1` first and fail.
-
-Create and inspect a production build:
-
-```bash
-npm run build
-npm start
-```
-
-Check types and lint the front end:
-
-```bash
-npm run typecheck
+npm run dev               # http://127.0.0.1:3000
+npm run typecheck         # tsc --noEmit
 npm run lint
+npm run build && npm start
 ```
+
+The game server binds **loopback only**: use `127.0.0.1`, not `localhost` — on
+macOS `localhost` may resolve to `::1` first and fail.
 
 ## Configuration
 
-### Front end
-
-The backend URL is read from an environment file, copied from
-`web/.env.local.example`:
-
-```text
-web/.env.local
-```
+**Front end.** `web/.env.local`, copied from `web/.env.local.example`:
 
 ```text
 NEXT_PUBLIC_WS_URL=ws://127.0.0.1:8000/ws
 ```
 
-Without it the client falls back to the same default address.
+Without it the client falls back to the same address.
 
-### Back end
-
-One variable, copied from `backend/.env.example`:
+**Back end.** One variable, `DATABASE_URL`, from `backend/.env.example`:
 
 ```text
-DATABASE_URL=sqlite:///./leaderboard.db
-```
-
-That file appears next to the server on first run and is gitignored. Rooms are
-not configured because rooms are not stored: they live in memory, and a room is
-worth nothing once everyone has left. The leaderboard is the only thing that
-outlives the process.
-
-```text
-sqlite:///./leaderboard.db    a file - the default
+sqlite:///./leaderboard.db    a file — the default, created on first run
 sqlite:///:memory:            nothing survives the process
 postgresql://user@host/db     raises; see below
 ```
 
-Deploying means pointing `DATABASE_URL` at a real database. The data access
-layer is a `LeaderboardRepository` Protocol in
-`backend/leaderboard/repository.py`, and `repository_from_env()` dispatches on
-the URL scheme - so Postgres is a new class implementing four methods and one
-extra branch there, and nothing above that layer changes. Until it exists, a
-`postgresql://` URL **raises on startup** rather than silently falling back to a
-local file, because a deployed server quietly writing its scoreboard to a
-container's disk looks exactly like a working one until it restarts.
+- Rooms are not configured because rooms are not stored: they live in memory and
+  are worth nothing once everyone leaves.
+- The leaderboard is the only durable state, behind a `LeaderboardRepository`
+  Protocol (`backend/leaderboard/repository.py`); `repository_from_env()`
+  dispatches on the URL scheme.
+- Postgres is a new class with four methods and one branch there. Until it
+  exists a `postgresql://` URL **raises on startup** — a deployed server quietly
+  writing its scoreboard to a container's disk looks like a working one until it
+  restarts.
 
 ## Playing
 
 ### Solo
 
-Pick a nickname, look at the top ten, and play. The rules are the ones the game
-has always had: the snake waits in the middle until your first arrow key, arrows
-or WASD steer and start, Space pauses and resumes, R resets, and an apple grows
-you by one and flips the palette to the next of eight pairs.
+| | |
+| --- | --- |
+| Board | 48x27 |
+| Start | the first arrow key; the snake waits in the middle until then |
+| Steer | arrows or WASD |
+| Keys | Space pauses and resumes, R resets |
+| Apple | +1 length, +1 score, and the screen flips to the next of eight palettes |
+| Light | one cell of full brightness, then a seven-cell fade to 90% dark |
+| Whole board | READY, PAUSED and GAME_OVER — the dark is the difficulty, so it lights only play |
 
-A spotlight sits on the snake's head while the run is going, and the board fades
-away behind it - full brightness for a cell, then a seven-cell fade to 90% dark,
-which is where it stays. The dark is the difficulty, so it lights only a running
-game: the opening board, a pause and the game-over board are all shown whole.
+Leaderboard:
 
-When the run ends, **the server** writes the score. There is no client message
-that carries a score, so there is nothing for a browser to inflate.
-
-The table is a list of **players, not runs**: you hold one row, and it holds
-your best. Beat it and your own row moves up; fall short of it and nothing
-changes. Ties are broken by who got there first, and matching your own best does
-not reset that — the place stays yours from when you first reached it. The store
-keeps 100 rows; the menu shows the top ten of them.
-
-A run that ate nothing is not recorded: it is the commonest way to leave the
-board and says nothing about anyone. You are still told what you scored, and the
-card says so, so you are not left looking for a row that was never coming.
-
-A name in the visible top ten is spoken for: nobody else can play under it, so
-nobody can appear to be one of the names on the board. The check folds case and
-is made fresh on every claim, because the table moves. It applies in rooms too,
-and it applies to the holder as well - getting into the top ten retires that
-name.
+- The **server** writes the score. No client message carries one.
+- One row per player, holding their best; ties go to whoever got there first.
+- 100 rows stored, ten shown on the menu.
+- A run that ate nothing is not recorded, and the card says so.
+- A name in the visible top ten is reserved against everyone, the holder included.
 
 ### Group
 
-One player creates a room and gets a six-character code from the server - upper
-case, with no `O`, `0`, `I` or `1` in the alphabet, because a code is meant to
-be read off somebody else's screen. Up to five play; two is the minimum; the
-first one in is the host and only the host can start.
+| | |
+| --- | --- |
+| Players | 2–5 |
+| Code | six characters, upper case, no `O` `0` `I` `1` |
+| Host | the first one in; only the host can start |
+| Start | a synchronised `3 · 2 · 1`, every snake at once |
+| Board | 64x36, white, with a black frame for the walls |
+| Apples | 2 for two players, 3 for three, 4 for four or five |
+| Light | as solo, plus: an opponent past five cells is not drawn at all |
+| Telling snakes apart | a name tag on your own head, and a numbered roster in the corner |
 
-After a synchronised `3 · 2 · 1`, every snake starts at once on one 64x36 board.
-Each player gets a colour the server hands out as an index. The board is
-**white**, with a black frame marking the walls: palette cycling belongs to a
-solo run, and one fixed ground is what lets five player colours be told apart
-the same way in every round. `web/test/palette.test.mjs` measures both the
-contrast each colour carries against that ground and how far apart the five are
-by eye, so a retune that makes one vanish or two alike fails the build. The
-snakes are drawn exactly as solo draws its own - same square segments, same
-black eyes - so a room looks like the game rather than like a different one.
-Your own carries a small name tag on its head, and the corner roster numbers and
-names everyone, so telling the snakes apart never depends on telling the colours
-apart.
+Death:
 
-The same spotlight follows your head here, and it does one extra thing: an
-opponent more than five cells away is not drawn at all. That cut is deliberately
-shorter than the shadow's eight-cell fade, so a snake never blinks out on a
-visible edge. It is **appearance, not enforcement** - the server still sends
-every snake's position to everybody, so the fog hides opponents from the player,
-not from the browser. A player who has died watches the round with the light
-off: there is nothing left to hide from them.
+| | |
+| --- | --- |
+| Wall, or your own body | you die |
+| Another snake's body | you die; they do not |
+| Two heads into the same cell | everyone in that cell dies |
+| Two snakes swapping places | both die |
 
-```text
-Wall, or your own body            you die
-Another snake's body              you die; they do not
-Two heads into the same cell      everyone in that cell dies
-Two snakes swapping places        both die
-```
-
-An apple is worth 1. There are no kill points - deciding who is to blame for a
-collision is not something this version can do reliably. Two snakes reaching one
-apple together is not a special case: they have already died to the head-on
-rule, so the apple is still there.
-
-The board carries two apples for two players, three for three, four for four or
-five. Death removes your body from the board; you keep watching, on the same
-socket, with the live standing still updating, and your keys stop counting.
-The round ends when one snake is left. Ranking is survival first, score second,
-and players level on both share a place, which consumes the slots behind it:
-1, 1, 3. **Room scores never reach the solo leaderboard.**
+- An apple is worth 1. There are no kill points.
+- Death clears your body; you watch on, and your keys stop counting.
+- The round ends when one snake is left.
+- Ranking is survival first, score second; a shared place consumes the slots behind it: 1, 1, 3.
+- **Room scores never reach the solo leaderboard.**
+- The fog is **appearance, not enforcement**: the server sends every position to
+  everybody, so it hides opponents from the player, not from the browser. A dead
+  player watches with the light off.
 
 ## Tests
 
@@ -213,15 +138,11 @@ The rules are tested on the Python side, with no browser:
 ```bash
 cd backend
 .venv/bin/pytest
-```
-
-Every case carries a marker mirroring the file it lives in, so one group can be
-run alone:
-
-```bash
-.venv/bin/pytest -m multiplayer
+.venv/bin/pytest -m multiplayer      # one marker group
 .venv/bin/pytest -k "absent food"
 ```
+
+Every case carries a marker mirroring its file:
 
 ```text
 snake        the body, growth, and the turn buffer
@@ -235,25 +156,20 @@ leaderboard  the solo high-score store
 protocol     the full client/server contract, over a real socket
 ```
 
-`protocol` is the only group that is not instant: it opens real WebSockets and
-waits out a shortened countdown.
+`protocol` is the only slow group: real WebSockets and a shortened countdown.
 
-The front end is mostly checked rather than unit tested. What is tested is the
-arithmetic that has no React in it - the board fit and the cell grid, the player
-colours against the board they are played on, and the fog's radii and falloff:
+The front end is checked rather than unit tested, apart from the arithmetic with
+no React in it — the board fit, the player colours, the fog's radii and falloff:
 
 ```bash
 cd web
-npm run typecheck
-npm run lint
-npm run build
 npm test        # node --test over web/test/*.test.mjs
 ```
 
 ## The Wire Contract
 
-One set of messages is written twice, and there is no schema or codegen between
-them. **Change one, change the other in the same commit.**
+One set of messages, written twice, with no schema or codegen between them.
+**Change one, change the other in the same commit.**
 
 ```text
 backend/protocol.py          every message, in and out
@@ -263,16 +179,12 @@ backend/room/room.py         lobby_state() / results()
 web/types/game.ts            ServerMessage / ClientMessage
 ```
 
-Solo keeps the older `"state"` tag and a room sends `"game_state"`: one snake
-and one apple is a different shape from several snakes, a list of apples and a
-roster, and one tag would mean every reader branching on a field instead of on
-the tag.
+Solo keeps `"state"` and a room sends `"game_state"`: one snake and one apple is
+a different shape from five snakes, a list of apples and a roster.
+`docs/protocol.md` is the full reference — every message, limit, error code and
+the room lifecycle.
 
-`docs/protocol.md` is the full reference: every message, the limits, the error
-codes, and the room lifecycle.
-
-One key press, end to end - a turn is a round trip, and the browser draws
-nothing until the server has answered:
+A turn is a round trip; the browser draws nothing until the server answers:
 
 ```text
           player presses W
@@ -304,15 +216,14 @@ nothing until the server has answered:
   lib/renderer.ts              repaints the board it was handed
 ```
 
-Three things bend that rule deliberately, and all three are appearance rather
-than rules. **Colour**: the server sends `palette`, an integer index that
-advances with every apple, and the hex pairs live in `web/lib/palette.ts`, so a
-colour can be retuned without restarting the backend. Only a solo run paints it;
-loading, the menus, a lobby and a result are black ground and white type, and a
-shared board is white. **Board size**: the grid is the server's, and the browser
-only decides how large to draw it, so resizing the window scales the whole game
-by one factor and can never end a run. **The fog**: `web/lib/vision.ts` decides
-what is drawn and how bright it is, out of state the server sent in full.
+Three things bend that rule, all appearance rather than rules:
+
+- **Colour** — the server sends `palette`, an index; the hex pairs live in
+  `web/lib/palette.ts`, so a hue can be retuned without restarting the backend.
+- **Board size** — the grid is the server's, the browser only decides how large
+  to draw it, so resizing scales the game by one factor and can never end a run.
+- **The fog** — `web/lib/vision.ts` decides what is drawn and how bright, out of
+  state the server sent in full.
 
 ## Project Structure
 
@@ -379,17 +290,17 @@ Space           pause and resume            (solo)
 R               reset                       (solo)
 ```
 
-Space and R do nothing while a text field has focus, and nothing in a room -
-a round belongs to everyone in it, so no one player can pause it.
+Both do nothing while a text field has focus, and nothing in a room — a round
+belongs to everyone in it, so no one player can pause it.
 
 ## Privacy
 
-No email, no password, no account, no OAuth. A nickname is a one-off label typed
-per session, remembered in `localStorage` only so the box comes back filled in.
-The server stores nicknames and scores for finished solo runs, and nothing else.
+No email, no password, no account, no OAuth. A nickname is a one-off label,
+remembered in `localStorage` only so the box comes back filled in. The server
+stores nicknames and scores for finished solo runs, and nothing else.
 
 ## Rights
 
 © 2026 YLX. Released under the [MIT License](LICENSE): use it, change it, ship
-it, sell it - commercially or not - as long as the copyright notice and the
+it, sell it — commercially or not — as long as the copyright notice and the
 licence text travel with the copy. It comes with no warranty.
