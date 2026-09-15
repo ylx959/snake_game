@@ -23,7 +23,6 @@ import { ResultsScreen } from "@/components/screens/ResultsScreen";
 import { SoloScreen } from "@/components/screens/SoloScreen";
 import { useBoardRect } from "@/hooks/useBoardRect";
 import { useGameSession } from "@/hooks/useGameSession";
-import { useMenuPop } from "@/hooks/useMenuPop";
 import { PAPER, paletteAt } from "@/lib/palette";
 import { boardShape } from "@/lib/renderer";
 
@@ -48,9 +47,10 @@ export default function Home() {
   const board = useBoardRect(shape.cols, shape.rows);
 
   // A screen with a board on it wears that board's palette; every screen that
-  // is only text - loading, the menus, a lobby, the countdown - takes the dark
-  // theme in globals.css instead. The server sends an index, never a colour;
-  // the hex lives in lib/palette.ts.
+  // is only text - loading, the menu, a lobby, the countdown, a result - takes
+  // the dark theme in globals.css instead. There is no third theme: the menu
+  // cycled six flat colours on a timer and no longer does. The server sends an
+  // index, never a colour; the hex lives in lib/palette.ts.
   //
   // Both modes send one, and each decides for itself when it turns: solo on
   // every apple, a room on every death. Setting the pair as custom properties
@@ -75,29 +75,18 @@ export default function Home() {
   const palette = phase === "solo" ? paletteAt(session.solo?.palette ?? 0) : null;
   const onBoard = palette !== null || view?.mode === "group";
 
-  // The menu is the third theme. It is not a board and it is not one of the
-  // black text screens: it cycles five flat colours on a timer and jolts on
-  // every switch, which is what an attract screen is for. Only `--bg` and which
-  // way round the type goes come from here; the rest of the pair is the
-  // `data-theme="pop"` block in globals.css. The shake is a CSS animation on
-  // the title, which punches and rattles as the ground changes colour under it.
-  // `data-pop` alternating is what restarts it - see useMenuPop.
-  const menu = useMenuPop(phase === "menu");
-  const theme = onBoard ? undefined : phase === "menu" ? "pop" : "dark";
+  const theme = onBoard ? undefined : "dark";
 
   return (
     <main
       className="screen"
       data-theme={theme}
-      data-ink={theme === "pop" ? menu.color.ink : undefined}
       style={
         palette
           ? ({ "--bg": palette.bg, "--fg": palette.fg } as React.CSSProperties)
           : view?.mode === "group"
             ? ({ "--bg": PAPER, "--emboss": "transparent" } as React.CSSProperties)
-            : theme === "pop"
-              ? ({ "--bg": menu.color.bg } as React.CSSProperties)
-              : undefined
+            : undefined
       }
     >
       <div
@@ -133,7 +122,6 @@ export default function Home() {
               leaderboard={session.leaderboard}
               error={session.error}
               dismissError={session.dismissError}
-              beat={menu.beat}
             />
           )}
 

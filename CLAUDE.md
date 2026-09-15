@@ -117,8 +117,8 @@ Two places bend that rule, both deliberately:
   is no field left for the two sides of the contract to disagree about.
 
   A solo screen wears its pair. A room takes the stylesheet's default — black
-  type on the white board — and the remaining text-only screens (loading, a
-  lobby, the countdown, a result) take `data-theme="dark"`, which inverts the
+  type on the white board — and every text-only screen (loading, the menu, a
+  lobby, the countdown, a result) takes `data-theme="dark"`, which inverts the
   same five tokens rather than restating any rule. A room board also sets
   `--emboss` inline: it follows `--fg`, which at the root is still solo's first
   foreground, so without that a room's big type would pick up a red drop shadow
@@ -130,49 +130,24 @@ Two places bend that rule, both deliberately:
   inherited as a *computed* value, so a subtree would keep `body`'s black no
   matter what the theme redefined `--ink` to.
 
-  **The menu is a third theme, `data-theme="pop"`.** It was dark like the rest
-  and is now an attract screen: `MENU_COLORS` in `web/lib/palette.ts` is six flat
-  colours, `hooks/useMenuPop.ts` steps through them on a 3.2s timer, and the
-  `SNAKE` title takes the hit on every step (`.title[data-pop]`). The server is
-  not involved and never was — a menu is not a run, so unlike solo's flip the
-  colour reports nothing; it is there so the title page is not still.
+  **There is no third theme, and there was.** The menu ran
+  `data-theme="pop"`: six flat colours from `MENU_COLORS` on a 3.2s timer, with
+  the `SNAKE` title knocked and `ChromaticText`'s channels blown apart on every
+  switch. It is gone — the theme block, `MENU_COLORS`, `hooks/useMenuPop.ts`,
+  the `beat` prop, and the `menu-pop-*` / `chroma-hit-*` keyframes — because
+  every menu is now one ground: black, white type, like the rest. The menu is
+  also the one screen a player has to read a leaderboard on and type a name
+  into, so holding still is worth more there than looking alive.
 
-  **The knock and the aberration are one event.** `menu-pop-*` rattles the
-  title's geometry and `chroma-hit-*` blows `ChromaticText`'s three channels
-  apart at the same moment, on the same six steps, over the same 360ms: the word
-  is struck, and the guns come apart *because* of it. That is why `.chroma`
-  carries `--split-base` as well as `--split` — the hit is written in multiples
-  of the resting split, and a keyframe cannot use `--split` as its own basis.
-  `chroma-hit-*` lands back on `--split-base` at 100%, which is exactly where
-  `.chroma`'s own declaration is already holding it, so removing the animation
-  changes nothing.
+  Two consequences of that removal worth knowing. `ChromaticText` on the title
+  is back on a black ground, which is the ground it assumes, so the black
+  `--emboss` the pop theme needed is gone with it — the dark theme's
+  `--emboss: transparent` is right again. And `.chroma` no longer splits
+  `--split-base` from `--split`: the two existed only because the hit was
+  written in multiples of the resting split and a keyframe cannot use `--split`
+  as its own basis. The resting split is now `--split` alone, still a fallback
+  pair for `round()`.
 
-  Three things about it are load-bearing:
-
-  - **Only the title moves.** The buttons, the cards and the nickname field hold
-    still under every switch, which is why the timer needs no "pause while
-    typing" guard. Two earlier versions shook the menu content and then the
-    ground itself, and both did.
-  - **Each colour carries its own `ink`, and it is measured.** Five of the six
-    take black type; `#4B2BEE` is 2.9:1 against black and 7.3:1 against white,
-    so it alone turns the pair over, via `data-ink="white"`. Retuning a hex here
-    means re-checking that pair — a menu colour is the ground a whole screen of
-    type sits on, with nothing else to fall back to. `MENU_COLORS` is its own
-    list and not a second use of `PLAYER_COLORS`, which is pinned by
-    `test/palette.test.mjs` against a white board for a different job.
-  - **The two `menu-pop-a`/`menu-pop-b` keyframe blocks are identical on
-    purpose.** A CSS animation restarts when its `animation-name` changes and at
-    no other moment, so re-rendering with one name would land the first jolt and
-    then nothing. `useMenuPop` alternates `beat` to swap the name. The obvious
-    alternative — `key` on the element to force a remount — would throw away
-    whatever the player had typed.
-
-  `--emboss` is black in this theme rather than `--fg`, and that is what keeps
-  the title readable. `ChromaticText` screens its three channels back to *white*
-  through the body of every glyph, and white on `#22DFF5` is 1.4:1; the black
-  offset shadow is the edge it reads against. It costs nothing on the two outer
-  channels — they are `mix-blend-mode: screen`, and screen with black is the
-  identity — so one clean shadow paints, not three.
 - **Board size.** Solo is `DEFAULT_WIDTH` x `DEFAULT_HEIGHT` = 48x27 and a room
   is `MULTI_WIDTH` x `MULTI_HEIGHT` = 64x36 — both exactly 16:9, so switching
   modes changes how fine the grid is and nothing about the shape of the page.
@@ -437,9 +412,8 @@ Rendering details that are load-bearing:
   Game Over score. Two details are load-bearing. It assumes a **dark ground** —
   `screen` over a light background only lightens it, so the fringes wash out.
   The Game Over card supplies one: it is `tone="ink"` for exactly this reason.
-  The menu used to supply one by being black and no longer does — see the menu
-  theme above for the black `--emboss` that replaced it. Moving it anywhere else means
-  checking what is behind it first.
+  The menu supplies one too: it is `data-theme="dark"`. Moving it anywhere else
+  means checking what is behind it first.
   And the word is in the DOM **once**: the element's own text is the green
   channel and `::before`/`::after` redraw it from `data-text`. An earlier
   version used three real spans with two `aria-hidden`, and the heading's
@@ -447,7 +421,7 @@ Rendering details that are load-bearing:
   element's contents, and that walk is not a reliable place to lean on
   `aria-hidden`. The `/ ""` in the `content` shorthand gives the generated text
   empty alternative text so assistive technology skips it too. Both `content`
-  declarations and both `--split-base` declarations are **fallback pairs**, not
+  declarations and both `--split` declarations are **fallback pairs**, not
   duplicates: an unsupported `round()` or `/ ""` invalidates its own line and
   the plainer one above survives.
 - `.board` and `.ui` carry explicit `z-index` (0 and 1) inside an

@@ -28,7 +28,6 @@ export function MenuScreen({
   leaderboard,
   error,
   dismissError,
-  beat,
 }: {
   send: (message: ClientMessage) => void;
   nickname: string | null;
@@ -36,14 +35,6 @@ export function MenuScreen({
   leaderboard: LeaderboardEntry[] | null;
   error: string | null;
   dismissError: () => void;
-  /**
-   * Flips with every colour the menu changes to, and means nothing but "again".
-   * It lands on the title as `data-pop`, where two identical keyframe blocks in
-   * globals.css are named a and b - a CSS animation restarts when its *name*
-   * changes and at no other moment, so this is what makes the second jolt
-   * happen at all. See hooks/useMenuPop.ts.
-   */
-  beat: "a" | "b";
 }) {
   const [view, setView] = useState<View>("home");
   const [draft, setDraft] = useState("");
@@ -91,7 +82,7 @@ export function MenuScreen({
   if (view === "home") {
     return (
       <div className="screenful">
-        <h1 className="title" data-pop={beat}>
+        <h1 className="title">
           <ChromaticText>Snake</ChromaticText>
         </h1>
         <p className="lede">A 90’S RETRO TAKE ON THE CLASSIC SNAKE GAME.</p>

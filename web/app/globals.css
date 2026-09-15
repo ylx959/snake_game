@@ -6,17 +6,18 @@
  * once. That colour flip is the solo game's signature and it belongs to the
  * solo game alone.
  *
- * **Loading, a lobby, a shared board, a result** are black ground and white
- * type. Those screens are not the game, and one that changed colour because of
- * something a stranger ate in another room was never saying anything. A shared
- * board is black for the same reason plus one more: five player colours have to
- * be told apart, and they do that far better against one fixed ground than
- * against eight moving ones.
+ * **Everything else** - loading, the menu, a lobby, a shared board, a result -
+ * is black ground and white type. Those screens are not the game, and one that
+ * changed colour because of something a stranger ate in another room was never
+ * saying anything. A shared board is black for the same reason plus one more:
+ * five player colours have to be told apart, and they do that far better
+ * against one fixed ground than against eight moving ones.
  *
- * **The menu** is the third: six flat colours on a timer, and it says nothing
- * either - it is an attract screen, not a report. See `data-theme="pop"` below.
+ * The menu was a third theme for a while - six flat colours on a timer, with
+ * the title jolting on every switch. It is gone: one menu, one ground, and the
+ * one screen where a player has to read and type is the calmest on the site.
  *
- * All three are the same five tokens, so no rule below is written twice.
+ * Both are the same five tokens, so no rule below is written twice.
  * `page.tsx` picks between them with `data-theme` on `.screen`.
  */
 
@@ -63,48 +64,6 @@
   --band: rgba(255, 255, 255, 0.1);
   /* White type with a white offset shadow is just a smear. */
   --emboss: transparent;
-}
-
-/* The **menu**, and only the menu. Six flat colours, swapped on a timer.
-
-   It is the solo palette's idea moved to the title page - a hard cut, never a
-   fade - with the difference that it says nothing: a menu is not a run, so the
-   colour is not a report, it is an attract screen. `page.tsx` supplies `--bg`
-   and `data-ink` from MENU_COLORS; every token below is derived from those two,
-   so retuning a hex is a one-line change in lib/palette.ts.
-
-   Two ways round rather than one, because the six are not equally light.
-   #FFE93D, #22DFF5, #3EE03E, #FF4A1F and #FF0CBA all carry black type at 6:1 or
-   better; #4B2BEE manages 2.9:1 against black and 7.3:1 against white, so it -
-   and only it - turns over. Which way round each goes is measured in
-   lib/palette.ts, not guessed here.
-
-   ⚠️ `--emboss` is **black in both**, not `--fg`. The title is ChromaticText,
-   whose three channels screen back to white through the body of every glyph,
-   and white on #22DFF5 is 1.4:1 - not type at all. The black offset shadow is
-   the edge it reads against. It costs nothing on the two outer channels: they
-   are `mix-blend-mode: screen`, and screen with black is the identity, so only
-   the middle channel's shadow ever paints. One clean shadow, not three.
-
-   ⚠️ `--void` is not redefined, for the same reason the dark theme leaves it
-   alone: the letterbox is the edge of the screen, not part of the picture. */
-.screen[data-theme="pop"] {
-  --fg: #000000;
-  --ink: #000000;
-  --paper: #ffffff;
-  --surface: #ffffff;
-  --shadow: rgba(0, 0, 0, 0.6);
-  --band: rgba(0, 0, 0, 0.08);
-  --emboss: #000000;
-}
-
-.screen[data-theme="pop"][data-ink="white"] {
-  --fg: #ffffff;
-  --ink: #ffffff;
-  --paper: #000000;
-  --surface: #000000;
-  --shadow: rgba(255, 255, 255, 0.3);
-  --band: rgba(255, 255, 255, 0.1);
 }
 
 * {
@@ -198,169 +157,6 @@ body {
   padding: calc(var(--cell) * 0.6) var(--cell) calc(var(--cell) * 0.8);
   /* The board owns the window; only the controls take clicks back. */
   pointer-events: none; /* 滑鼠事件「穿透」這一層，直接打到底下的 canvas */
-}
-
-/* The pop: the **title** jolts, and the ground changes colour under it.
-
-   The colour cut is instant - it is an inline custom property, and nothing here
-   transitions it - so on its own it would just be a page that is suddenly a
-   different colour. The jolt is what turns it into an event, and it is the one
-   word the page is named for that takes the hit: SNAKE punches out, rattles in
-   six hard steps and settles, while the ground behind it has already changed.
-   `steps(1, end)` is the same vocabulary the caret and `chroma-jolt` speak - a
-   smooth ease would read as a slide; this reads as a hit.
-
-   Only the title moves. The buttons, the lede and the cards below hold still,
-   so nothing a player is reading or typing into is ever in motion.
-
-   Percentages, not px: they are percentages of the title's own box, which is
-   already sized in `--cell`, so the jolt scales with the board on its own.
-
-   ⚠️ The two keyframe blocks are not a duplicate, they are the restart
-   mechanism. A CSS animation restarts when its `animation-name` changes, and
-   nothing else - re-rendering with the same name leaves the running animation
-   exactly where it was, so every switch after the first would land silently.
-   `data-pop` alternates a/b with every colour (see useMenuPop), which swaps the
-   name and starts it over. The usual alternative, `key` on the element to force
-   a remount, would throw away whatever the player had typed into the nickname
-   field. */
-.title[data-pop] {
-  animation: menu-pop-a 360ms steps(1, end) 1;
-}
-
-.title[data-pop="b"] {
-  animation-name: menu-pop-b;
-}
-
-/* The same hit, on the colour split rather than on the geometry.
-
-   The jolt and the aberration are one event, not two things that happen at the
-   same time: the word is knocked, and the three guns come apart because of it.
-   So this runs for exactly as long, on exactly the same steps, and lands the
-   channels back on `--split-base` at 100% - where `.chroma`'s own declaration
-   was already holding them, so nothing jumps when the animation is removed.
-
-   Multiples of `--split-base`, never absolute pixels: the resting split is
-   already a fraction of `--cell`, so the hit scales with the board like
-   everything else does. `steps(1, end)` is doing double duty here - a custom
-   property with no `@property` behind it animates discretely anyway, and this
-   is what makes the hold land on each keyframe's own value rather than halfway
-   between two of them.
-
-   The two names are the restart mechanism again. See above. */
-.title[data-pop] .chroma {
-  animation: chroma-hit-a 360ms steps(1, end) 1;
-}
-
-.title[data-pop="b"] .chroma {
-  animation-name: chroma-hit-b;
-}
-
-@keyframes chroma-hit-a {
-  0% {
-    --split: calc(var(--split-base) * 4);
-  }
-  14% {
-    --split: calc(var(--split-base) * 2.4);
-  }
-  30% {
-    --split: calc(var(--split-base) * 3.1);
-  }
-  48% {
-    --split: calc(var(--split-base) * 1.9);
-  }
-  66% {
-    --split: calc(var(--split-base) * 2.5);
-  }
-  84% {
-    --split: calc(var(--split-base) * 1.4);
-  }
-  100% {
-    --split: var(--split-base);
-  }
-}
-
-/* Character for character the same as chroma-hit-a. See above. */
-@keyframes chroma-hit-b {
-  0% {
-    --split: calc(var(--split-base) * 4);
-  }
-  14% {
-    --split: calc(var(--split-base) * 2.4);
-  }
-  30% {
-    --split: calc(var(--split-base) * 3.1);
-  }
-  48% {
-    --split: calc(var(--split-base) * 1.9);
-  }
-  66% {
-    --split: calc(var(--split-base) * 2.5);
-  }
-  84% {
-    --split: calc(var(--split-base) * 1.4);
-  }
-  100% {
-    --split: var(--split-base);
-  }
-}
-
-@keyframes menu-pop-a {
-  0% {
-    transform: scale(1.06);
-  }
-  14% {
-    transform: scale(0.975) translate(-0.9%, 0.6%);
-  }
-  30% {
-    transform: scale(1.03) translate(0.7%, -0.45%);
-  }
-  48% {
-    transform: scale(0.992) translate(-0.4%, 0.22%);
-  }
-  66% {
-    transform: scale(1.012) translate(0.22%, 0.16%);
-  }
-  84% {
-    transform: scale(0.997) translate(-0.1%, 0);
-  }
-  100% {
-    transform: none;
-  }
-}
-
-/* Character for character the same as menu-pop-a. See above. */
-@keyframes menu-pop-b {
-  0% {
-    transform: scale(1.06);
-  }
-  14% {
-    transform: scale(0.975) translate(-0.9%, 0.6%);
-  }
-  30% {
-    transform: scale(1.03) translate(0.7%, -0.45%);
-  }
-  48% {
-    transform: scale(0.992) translate(-0.4%, 0.22%);
-  }
-  66% {
-    transform: scale(1.012) translate(0.22%, 0.16%);
-  }
-  84% {
-    transform: scale(0.997) translate(-0.1%, 0);
-  }
-  100% {
-    transform: none;
-  }
-}
-
-/* The colour still changes - it is the screen, not motion for its own sake.
-   What goes is the thing that actually moves. */
-@media (prefers-reduced-motion: reduce) {
-  .title[data-pop],
-  .title[data-pop] .chroma {
-    animation: none;
-  }
 }
 
 .ui__gap {
@@ -1045,9 +841,8 @@ body {
  * 的，三份真的文字會讓它變成 "SnakeSnakeSnake"。虛擬元素的內容不在 DOM 裡。
  *
  * 這個效果假設底色是黑的。screen 疊在亮底上只會更亮，色邊會整個洗掉。
- * Game Over 那張卡片是 tone="ink"，底色就是黑的；選單已經不是了（現在是六個
- * 彩色底），它改靠 --emboss 的黑色位移陰影給字一個可讀的邊——見上面
- * data-theme="pop" 那一段。
+ * 現在用到它的兩個地方底色都是黑的：選單是 data-theme="dark"，Game Over
+ * 那張卡片是 tone="ink"。要搬到別的地方，先確認它後面是什麼顏色。
  */
 .chroma {
   position: relative;
@@ -1061,14 +856,9 @@ body {
      於是第一行的 2px 留下來當後備——這是 CSS 唯一的「fallback」寫法。
      round(…, 1px) 把偏移量鎖在整數像素上，理由跟 fitBoard() 把格子取整一樣：
      這是像素字型，半格的位移會讓邊緣糊掉，而糊掉的邊緣正是這個效果的全部。
-     0.085 格在一般視窗下約等於 2px。超過 3px 就不再像鏡頭，只像壞掉。
-
-     休息時 --split 就是 --split-base。分成兩個變數，是因為選單標題被撞到的
-     那 360ms 要把 --split 拉開成基準的好幾倍再收回來（見 chroma-hit-*），
-     而 keyframe 裡沒辦法拿「--split 自己」當基準算倍數。 */
-  --split-base: 2px;
-  --split-base: max(1px, round(calc(var(--cell) * 0.085), 1px));
-  --split: var(--split-base);
+     0.085 格在一般視窗下約等於 2px。超過 3px 就不再像鏡頭，只像壞掉。 */
+  --split: 2px;
+  --split: max(1px, round(calc(var(--cell) * 0.085), 1px));
 
   /* 明確建立一個混色群組，讓 screen 只跟這三個通道彼此相加，
      而不是往外找 .ui 或 canvas 當底。跟 .board / .ui 的 z-index 同一個理由：
