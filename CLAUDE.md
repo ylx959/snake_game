@@ -132,7 +132,7 @@ Two places bend that rule, both deliberately:
 
   **The menu is a third theme, `data-theme="pop"`.** It is an attract screen:
   `MENU_COLORS` in `web/lib/palette.ts` is six flat colours, `hooks/useMenuPop.ts`
-  steps through them on a 3.2s timer, and the `SNAKE` title takes the hit on
+  steps through them on a 5.6s timer, and the `SNAKE` title takes the hit on
   every step (`.title[data-pop]`). The server is not involved and never was — a
   menu is not a run, so unlike solo's flip the colour reports nothing; it is
   there so the title page is not still.
@@ -143,7 +143,7 @@ Two places bend that rule, both deliberately:
   on all six colours. A button that turned over with the ground would be more
   of the flashing rather than a thing the flashing passes behind, and this is
   the one screen where somebody has to read a leaderboard and type a name into
-  a box. Both of those rules pin `--shadow` black: the ink pairing casts a
+  a box, which is also why the hold is 5.6s rather than the 3.2s it started at. Both of those rules pin `--shadow` black: the ink pairing casts a
   *white* shadow because it normally sits on black (the Game Over card), and
   white on #FFE93D is a haze rather than a drop shadow. The type standing
   directly on the ground — the title, the lede, the note — is the only thing
@@ -151,7 +151,7 @@ Two places bend that rule, both deliberately:
 
   **The knock and the aberration are one event.** `menu-pop-*` rattles the
   title's geometry and `chroma-hit-*` blows `ChromaticText`'s three channels
-  apart at the same moment, on the same six steps, over the same 360ms: the word
+  apart at the same moment, on the same six steps, over the same 640ms: the word
   is struck, and the guns come apart *because* of it. That is why `.chroma`
   carries `--split-base` as well as `--split` — the hit is written in multiples
   of the resting split, and a keyframe cannot use `--split` as its own basis.
@@ -470,6 +470,16 @@ Rendering details that are load-bearing:
   declarations and both `--split-base` declarations are **fallback pairs**, not
   duplicates: an unsupported `round()` or `/ ""` invalidates its own line and
   the plainer one above survives.
+
+  **`chroma-jolt`'s percentages are tied to its period, so the two move
+  together.** The two channels drift on 12s and 17s and jolt on 11s and 9.3s —
+  all four deliberately out of step, because two channels that sync up stop
+  reading as an aberration and start reading as the whole word wobbling. The
+  jolt keyframe is `none` until 95.5%: it is a *snap*, and how long that snap
+  lasts is that percentage times the period, so lengthening the period alone
+  stretches the snap into a slow wobble. The last change — 6.5s to 11s — moved
+  91% to 95.5% for exactly this reason, which keeps the snap at the 0.45s it
+  has always been and only makes it rarer.
 - `.board` and `.ui` carry explicit `z-index` (0 and 1) inside an
   `isolation: isolate` stage. Without them the order is only *implied* by DOM
   order, and a canvas repainting eight times a second is exactly the thing a

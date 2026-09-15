@@ -9,7 +9,7 @@
  * moment a command goes up, the server's reply moves the whole session on.
  *
  * Every card here is `tone="ink"`: black with white type, on a ground that is
- * changing colour under it every 3.2s. The interface holds still and the
+ * changing colour under it every 5.6s. The interface holds still and the
  * background is what moves - a card that turned over with the ground would put
  * a player's name half typed onto a surface that is a different colour by the
  * time they finish the word. The type standing directly on the ground - the

@@ -122,7 +122,7 @@
    button is a thing and the ground is a backdrop: one fixed object that the
    colour passes behind reads as furniture; one that turns over with the colour
    reads as more of the flashing. It is also the difference between a control
-   that is always in the same place and one a player has to re-find every 3.2s.
+   that is always in the same place and one a player has to re-find every 5.6s.
 
    `--shadow` is pinned black here rather than inherited: on #4B2BEE the pair
    above has already turned it white for white type, and a white offset under a
@@ -268,7 +268,7 @@ body {
    a remount, would throw away whatever the player had typed into the nickname
    field. */
 .title[data-pop] {
-  animation: menu-pop-a 360ms steps(1, end) 1;
+  animation: menu-pop-a 640ms steps(1, end) 1;
 }
 
 .title[data-pop="b"] {
@@ -292,7 +292,7 @@ body {
 
    The two names are the restart mechanism again. See above. */
 .title[data-pop] .chroma {
-  animation: chroma-hit-a 360ms steps(1, end) 1;
+  animation: chroma-hit-a 640ms steps(1, end) 1;
 }
 
 .title[data-pop="b"] .chroma {
@@ -1107,7 +1107,7 @@ body {
      0.085 格在一般視窗下約等於 2px。超過 3px 就不再像鏡頭，只像壞掉。
 
      休息時 --split 就是 --split-base。分成兩個變數，是因為選單標題被撞到的
-     那 360ms 要把 --split 拉開成基準的好幾倍再收回來（見 chroma-hit-*），
+     那 640ms 要把 --split 拉開成基準的好幾倍再收回來（見 chroma-hit-*），
      而 keyframe 裡沒辦法拿「--split 自己」當基準算倍數。 */
   --split-base: 2px;
   --split-base: max(1px, round(calc(var(--cell) * 0.085), 1px));
@@ -1142,17 +1142,19 @@ body {
   color: #ff0000;
   translate: calc(var(--split) * -1) 0;
   animation:
-    chroma-drift-left 7s ease-in-out infinite,
-    chroma-jolt 6.5s steps(1, end) infinite;
+    chroma-drift-left 12s ease-in-out infinite,
+    chroma-jolt 11s steps(1, end) infinite;
 }
 
 .chroma::after {
   color: #0000ff;
   translate: var(--split) 0;
-  /* 週期跟紅色互質，兩邊才不會一直同步抽動。 */
+  /* 週期跟紅色互質，兩邊才不會一直同步抽動。
+     12 / 17 和 11 / 9.3 都還是互質的——拉長週期的時候這件事最容易被弄丟，
+     一旦兩邊對上了，兩個通道會開始一起抽，看起來就只是整個字在晃。 */
   animation:
-    chroma-drift-right 9s ease-in-out infinite,
-    chroma-jolt 5.3s steps(1, end) infinite;
+    chroma-drift-right 17s ease-in-out infinite,
+    chroma-jolt 9.3s steps(1, end) infinite;
 }
 
 @keyframes chroma-drift-left {
@@ -1176,22 +1178,29 @@ body {
 }
 
 /* 大部分時間是 none，只有末尾那幾個百分比會抽三下。
-   steps(1, end) 讓它是「跳格」而不是「滑過去」——跟 blink 用同一個理由。 */
+   steps(1, end) 讓它是「跳格」而不是「滑過去」——跟 blink 用同一個理由。
+
+   ⚠️ 這些百分比是跟著週期一起改的，不是原本那組。keyframe 的百分比是「比例」，
+   週期從 6.5s 拉長到 11s 之後，原本的 91%–98% 會把那三下從 0.45 秒拖成 0.77 秒
+   ——那就不是抽一下，是慢慢晃，整個效果的重點就沒了。
+   現在的 95.5%–99.6% 在 11s 下是 0.45 秒，在 9.3s 下是 0.38 秒，跟拉長之前
+   一模一樣：抽動本身沒變，只是變得更少見。
+   所以「拉長」在這裡指的是兩次抽動之間的間隔，不是抽動本身。 */
 @keyframes chroma-jolt {
   0%,
-  91% {
+  95.5% {
     transform: none;
   }
-  92.5% {
+  96.4% {
     transform: translate(calc(var(--split) * 3), 0);
   }
-  94.5% {
+  97.6% {
     transform: translate(calc(var(--split) * -2), calc(var(--split) * -1));
   }
-  96.5% {
+  98.8% {
     transform: translate(calc(var(--split) * 1.5), 0);
   }
-  98%,
+  99.6%,
   100% {
     transform: none;
   }

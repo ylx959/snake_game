@@ -25,8 +25,16 @@ import { useEffect, useState } from "react";
 
 import { menuColorAt, type MenuColor } from "@/lib/palette";
 
-/** How long each colour holds. Long enough to read a card, short enough to notice. */
-const HOLD_MS = 3200;
+/**
+ * How long each colour holds.
+ *
+ * It was 3.2s and is now 5.6s. The shorter hold made the page busy rather than
+ * alive: on the two views that carry a leaderboard and a name field, a ground
+ * that turned over twice while somebody read a row was the thing they noticed,
+ * not the game. Long enough now to finish reading a card between switches, and
+ * still short enough that a player waiting on the title sees it happen.
+ */
+const HOLD_MS = 5600;
 
 export function useMenuPop(active: boolean): { color: MenuColor; beat: "a" | "b" } {
   const [step, setStep] = useState(0);

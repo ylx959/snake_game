@@ -32,7 +32,7 @@
  * On the menu the split is also *driven*: every time the background changes
  * colour the title is knocked, and `chroma-hit-*` throws the three channels
  * several times their resting distance apart and rattles them back over the
- * same 360ms. Nothing here knows about that - the effect is entirely `--split`,
+ * same 640ms. Nothing here knows about that - the effect is entirely `--split`,
  * and the animation simply moves it.
  */
 
