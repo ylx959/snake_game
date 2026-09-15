@@ -277,8 +277,7 @@ Three things bend that rule, all appearance rather than rules:
 │   ├── types/game.ts           # the wire contract, client side
 │   └── next.config.ts          # dev origins and dev indicators
 ├── docs/protocol.md            # every message, limit and error code
-├── CLAUDE.md                   # working notes on the load-bearing details
-├── education.md                # a teaching guide to this code, in Chinese
+├── CLAUDE.md                   # working notes on the load-bearing details         
 └── LICENSE                     # MIT
 ```
 
