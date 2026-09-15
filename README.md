@@ -1,5 +1,9 @@
 # Snake Game — retro ’90s style
 
+Here's the [Game's Website](https://snake-game.ylx-studio.com/)
+
+![cover](web/app/readme.png)
+
 Server-authoritative snake, solo or five at a time. Every rule lives in the
 Python backend, which also runs the clock; the browser draws the state it is
 sent and forwards key presses, and holds no game logic of its own.
