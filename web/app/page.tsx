@@ -23,6 +23,7 @@ import { ResultsScreen } from "@/components/screens/ResultsScreen";
 import { SoloScreen } from "@/components/screens/SoloScreen";
 import { useBoardRect } from "@/hooks/useBoardRect";
 import { useGameSession } from "@/hooks/useGameSession";
+import { useMenuPop } from "@/hooks/useMenuPop";
 import { PAPER, paletteAt } from "@/lib/palette";
 import { boardShape } from "@/lib/renderer";
 
@@ -74,16 +75,29 @@ export default function Home() {
   const palette = phase === "solo" ? paletteAt(session.solo?.palette ?? 0) : null;
   const onBoard = palette !== null || view?.mode === "group";
 
+  // The menu is the third theme. It is not a board and it is not one of the
+  // black text screens: it cycles five flat colours on a timer and jolts on
+  // every switch, which is what an attract screen is for. Only `--bg` and which
+  // way round the type goes come from here; the rest of the pair is the
+  // `data-theme="pop"` block in globals.css. The shake is a CSS animation on
+  // the title, which punches and rattles as the ground changes colour under it.
+  // `data-pop` alternating is what restarts it - see useMenuPop.
+  const menu = useMenuPop(phase === "menu");
+  const theme = onBoard ? undefined : phase === "menu" ? "pop" : "dark";
+
   return (
     <main
       className="screen"
-      data-theme={onBoard ? undefined : "dark"}
+      data-theme={theme}
+      data-ink={theme === "pop" ? menu.color.ink : undefined}
       style={
         palette
           ? ({ "--bg": palette.bg, "--fg": palette.fg } as React.CSSProperties)
           : view?.mode === "group"
             ? ({ "--bg": PAPER, "--emboss": "transparent" } as React.CSSProperties)
-            : undefined
+            : theme === "pop"
+              ? ({ "--bg": menu.color.bg } as React.CSSProperties)
+              : undefined
       }
     >
       <div
@@ -119,6 +133,7 @@ export default function Home() {
               leaderboard={session.leaderboard}
               error={session.error}
               dismissError={session.dismissError}
+              beat={menu.beat}
             />
           )}
 

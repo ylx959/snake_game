@@ -22,8 +22,18 @@
  * empty alternative text, so assistive technology skips it too.
  *
  * The effect assumes a **dark ground**: screen over a light background only
- * lightens it, so the fringes would wash out. It gets one - the only screens
- * this appears on are black by definition (see the theme block in globals.css).
+ * lightens it, so the fringes would wash out. The solo Game Over score gets one
+ * from its card, which is `tone="ink"` for exactly this reason. The menu title
+ * no longer does - the menu is one of six flat colours now - so it leans on the
+ * black `--emboss` behind it instead: the glyph bodies come back white, and the
+ * offset shadow is the edge they read against. See the `data-theme="pop"` block
+ * in globals.css. Moving this anywhere else means checking what is behind it.
+ *
+ * On the menu the split is also *driven*: every time the background changes
+ * colour the title is knocked, and `chroma-hit-*` throws the three channels
+ * several times their resting distance apart and rattles them back over the
+ * same 360ms. Nothing here knows about that - the effect is entirely `--split`,
+ * and the animation simply moves it.
  */
 
 export function ChromaticText({
