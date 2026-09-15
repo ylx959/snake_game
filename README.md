@@ -2,28 +2,30 @@
 
 A server-authoritative snake game, solo or five at a time. A Python game server
 owns every rule and runs the clock; the browser draws the state it is sent and
-forwards key presses. The board is the page - it fills the window, and every
-apple flips the whole screen, background and snake alike, to the next colour
-pair.
+forwards key presses. The board is the page - it fills the window, a spotlight
+follows your head and the rest of the board falls into shadow, and on a solo run
+every apple flips the whole screen, background and snake alike, to the next
+colour pair.
 
 ## Highlights
 
 - Authoritative Python game loop: the server owns movement, food, scoring, death and the tick rate
-- **Solo**: one snake on a 48x27 board, with a global top-100 written by the server itself
+- **Solo**: one snake on a 48x27 board, with a leaderboard the server writes itself
 - **Group**: up to five snakes on one shared 64x36 board, one room, one clock, last one standing
+- A spotlight on the head: the board fades to near black eight cells out, and in a room an opponent more than five cells away is not drawn at all
 - Kahoot-style six-character room codes, with no accounts, passwords or email anywhere
 - Every death on a shared board decided before any snake moves, so message order cannot matter
 - Full-bleed canvas board, letterboxed to a fixed 16:9 grid at any window size
-- Whole-screen palette cycling on a solo run, driven by a server-sent index; every other screen is black and white
+- Whole-screen palette cycling on a solo run, driven by a server-sent index; a room is a fixed white board and every text screen is black
 - Readouts that turn white wherever a snake passes behind them, via a `clip-path` mask over duplicated text
 - Keyboard control matched on physical key position, with Space and R routed through the on-screen buttons
-- 322 backend tests grouped by marker, covering the rules without a socket or an event loop
+- 346 backend tests grouped by marker, covering the rules without a socket or an event loop
 
 ## Built with
 
 - [Python](https://www.python.org/) 3.11+ with [FastAPI](https://fastapi.tiangolo.com/) and [uvicorn](https://www.uvicorn.org/)
 - [pytest](https://docs.pytest.org/), and SQLite through the standard library
-- [Next.js](https://nextjs.org/) App Router and [React](https://react.dev/)
+- [Next.js](https://nextjs.org/) 16 App Router and [React](https://react.dev/) 19
 - [TypeScript](https://www.typescriptlang.org/), Canvas 2D, and hand-written CSS
 
 ## Local Development
@@ -131,7 +133,12 @@ container's disk looks exactly like a working one until it restarts.
 Pick a nickname, look at the top ten, and play. The rules are the ones the game
 has always had: the snake waits in the middle until your first arrow key, arrows
 or WASD steer and start, Space pauses and resumes, R resets, and an apple grows
-you by one and flips the palette.
+you by one and flips the palette to the next of eight pairs.
+
+A spotlight sits on the snake's head while the run is going, and the board fades
+away behind it - full brightness for a cell, then a seven-cell fade to 90% dark,
+which is where it stays. The dark is the difficulty, so it lights only a running
+game: the opening board, a pause and the game-over board are all shown whole.
 
 When the run ends, **the server** writes the score. There is no client message
 that carries a score, so there is nothing for a browser to inflate.
@@ -139,10 +146,12 @@ that carries a score, so there is nothing for a browser to inflate.
 The table is a list of **players, not runs**: you hold one row, and it holds
 your best. Beat it and your own row moves up; fall short of it and nothing
 changes. Ties are broken by who got there first, and matching your own best does
-not reset that — the place stays yours from when you first reached it.
+not reset that — the place stays yours from when you first reached it. The store
+keeps 100 rows; the menu shows the top ten of them.
 
 A run that ate nothing is not recorded: it is the commonest way to leave the
-board and says nothing about anyone. You are still told what you scored.
+board and says nothing about anyone. You are still told what you scored, and the
+card says so, so you are not left looking for a row that was never coming.
 
 A name in the visible top ten is spoken for: nobody else can play under it, so
 nobody can appear to be one of the names on the board. The check folds case and
@@ -158,14 +167,25 @@ be read off somebody else's screen. Up to five play; two is the minimum; the
 first one in is the host and only the host can start.
 
 After a synchronised `3 · 2 · 1`, every snake starts at once on one 64x36 board.
-Each player gets a colour the server hands out. The board is black, with a white
-frame marking the walls: the palette cycling belongs to a solo run, and one
-fixed ground is what lets five player colours be told apart the same way in
-every round. The snakes are drawn exactly as solo draws its own - same square
-segments, same eyes - so a room looks like the game rather than like a different
-one. Your own carries a small name tag on its head, and the corner roster
-numbers and names everyone, so telling the snakes apart never depends on telling
-the colours apart.
+Each player gets a colour the server hands out as an index. The board is
+**white**, with a black frame marking the walls: palette cycling belongs to a
+solo run, and one fixed ground is what lets five player colours be told apart
+the same way in every round. `web/test/palette.test.mjs` measures both the
+contrast each colour carries against that ground and how far apart the five are
+by eye, so a retune that makes one vanish or two alike fails the build. The
+snakes are drawn exactly as solo draws its own - same square segments, same
+black eyes - so a room looks like the game rather than like a different one.
+Your own carries a small name tag on its head, and the corner roster numbers and
+names everyone, so telling the snakes apart never depends on telling the colours
+apart.
+
+The same spotlight follows your head here, and it does one extra thing: an
+opponent more than five cells away is not drawn at all. That cut is deliberately
+shorter than the shadow's eight-cell fade, so a snake never blinks out on a
+visible edge. It is **appearance, not enforcement** - the server still sends
+every snake's position to everybody, so the fog hides opponents from the player,
+not from the browser. A player who has died watches the round with the light
+off: there is nothing left to hide from them.
 
 ```text
 Wall, or your own body            you die
@@ -183,8 +203,8 @@ The board carries two apples for two players, three for three, four for four or
 five. Death removes your body from the board; you keep watching, on the same
 socket, with the live standing still updating, and your keys stop counting.
 The round ends when one snake is left. Ranking is survival first, score second,
-and players level on both share a place. **Room scores never reach the solo
-leaderboard.**
+and players level on both share a place, which consumes the slots behind it:
+1, 1, 3. **Room scores never reach the solo leaderboard.**
 
 ## Tests
 
@@ -218,15 +238,16 @@ protocol     the full client/server contract, over a real socket
 `protocol` is the only group that is not instant: it opens real WebSockets and
 waits out a shortened countdown.
 
-The front end is checked rather than unit tested, plus a couple of geometry
-cases:
+The front end is mostly checked rather than unit tested. What is tested is the
+arithmetic that has no React in it - the board fit and the cell grid, the player
+colours against the board they are played on, and the fog's radii and falloff:
 
 ```bash
 cd web
 npm run typecheck
 npm run lint
 npm run build
-npm test
+npm test        # node --test over web/test/*.test.mjs
 ```
 
 ## The Wire Contract
@@ -241,6 +262,11 @@ backend/game/multiplayer.py  MultiplayerGame.to_dict()    -> "game_state"
 backend/room/room.py         lobby_state() / results()
 web/types/game.ts            ServerMessage / ClientMessage
 ```
+
+Solo keeps the older `"state"` tag and a room sends `"game_state"`: one snake
+and one apple is a different shape from several snakes, a list of apples and a
+roster, and one tag would mean every reader branching on a field instead of on
+the tag.
 
 `docs/protocol.md` is the full reference: every message, the limits, the error
 codes, and the room lifecycle.
@@ -278,14 +304,15 @@ nothing until the server has answered:
   lib/renderer.ts              repaints the board it was handed
 ```
 
-Two things bend that rule deliberately. **Colour**: the server sends `palette`,
-an integer index that advances with every apple, and the hex pairs live in
-`web/lib/palette.ts`, so a colour can be retuned without restarting the backend.
-Only a solo run paints it; loading, the menus, a lobby, a shared board and a
-result are black ground and white type.
-**Board size**: the grid is the server's, and the browser only decides how large
-to draw it, so resizing the window scales the whole game by one factor and can
-never end a run.
+Three things bend that rule deliberately, and all three are appearance rather
+than rules. **Colour**: the server sends `palette`, an integer index that
+advances with every apple, and the hex pairs live in `web/lib/palette.ts`, so a
+colour can be retuned without restarting the backend. Only a solo run paints it;
+loading, the menus, a lobby and a result are black ground and white type, and a
+shared board is white. **Board size**: the grid is the server's, and the browser
+only decides how large to draw it, so resizing the window scales the whole game
+by one factor and can never end a run. **The fog**: `web/lib/vision.ts` decides
+what is drawn and how bright it is, out of state the server sent in full.
 
 ## Project Structure
 
@@ -321,9 +348,9 @@ never end a run.
 │   │   ├── layout.tsx          # the pixel font
 │   │   └── globals.css         # the stage and the screens, sized in cells
 │   ├── components/
-│   │   ├── game/               # the board and the readouts over it
+│   │   ├── game/               # the canvas, the readouts, the name tag
 │   │   ├── screens/            # loading, menu, lobby, round, results
-│   │   └── ui/                 # the panel, and the two input fields
+│   │   └── ui/                 # the panel, the RGB-split text, the fields
 │   ├── hooks/
 │   │   ├── useGameSession.ts   # the only React <-> socket seam
 │   │   └── useBoardRect.ts     # measures the window
@@ -331,14 +358,17 @@ never end a run.
 │   │   ├── websocket.ts        # the WebSocket client
 │   │   ├── input.ts            # keys -> commands, by key position
 │   │   ├── renderer.ts         # canvas drawing, stateless per frame
+│   │   ├── vision.ts           # the spotlight, and what is drawn at all
 │   │   ├── palette.ts          # the colour pairs, and the player colours
 │   │   ├── nickname.ts         # the same rule as the server, run early
 │   │   └── board.ts            # where the board sits, and how big
+│   ├── test/                   # node --test: board, palette, vision
 │   ├── types/game.ts           # the wire contract, client side
 │   └── next.config.ts          # dev origins and dev indicators
 ├── docs/protocol.md            # every message, limit and error code
 ├── CLAUDE.md                   # working notes on the load-bearing details
-└── education.md                # a teaching guide to this code, in Chinese
+├── education.md                # a teaching guide to this code, in Chinese
+└── LICENSE                     # MIT
 ```
 
 ## Controls
@@ -360,5 +390,6 @@ The server stores nicknames and scores for finished solo runs, and nothing else.
 
 ## Rights
 
-© 2026 YLX. All rights reserved. The source is published for review; it is not
-licensed for reuse.
+© 2026 YLX. Released under the [MIT License](LICENSE): use it, change it, ship
+it, sell it - commercially or not - as long as the copyright notice and the
+licence text travel with the copy. It comes with no warranty.
