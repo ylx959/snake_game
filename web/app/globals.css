@@ -13,8 +13,9 @@
  * be told apart, and they do that far better against one fixed ground than
  * against eight moving ones.
  *
- * **The menu** is the third: six flat colours on a timer, and it says nothing
- * either - it is an attract screen, not a report. See `data-theme="pop"` below.
+ * **The menu** is the third: six flat colours, advanced by the player. It says
+ * nothing either - pressing the mascot changes the colour, and the colour is
+ * not a report about anything. See `data-theme="pop"` below.
  * Only the *ground* pops. Everything on the menu a player operates - the three
  * buttons and every card - is black with white type on all six colours, so the
  * one screen where somebody has to read a leaderboard and type a name into a
@@ -69,11 +70,12 @@
   --emboss: transparent;
 }
 
-/* The **menu**, and only the menu. Six flat colours, swapped on a timer.
+/* The **menu**, and only the menu. Six flat colours, advanced by hand.
 
    It is the solo palette's idea moved to the title page - a hard cut, never a
-   fade - with the difference that it says nothing: a menu is not a run, so the
-   colour is not a report, it is an attract screen. `page.tsx` supplies `--bg`
+   fade - with two differences: it says nothing, because a menu is not a run, and
+   it moves only when a player presses the mascot and its shake finishes. There
+   is no timer behind it. `page.tsx` supplies `--bg`
    and `data-ink` from MENU_COLORS; every token below is derived from those two,
    so retuning a hex is a one-line change in lib/palette.ts.
 
@@ -122,7 +124,8 @@
    button is a thing and the ground is a backdrop: one fixed object that the
    colour passes behind reads as furniture; one that turns over with the colour
    reads as more of the flashing. It is also the difference between a control
-   that is always in the same place and one a player has to re-find every 5.6s.
+   that is always in the same place and one a player has to re-find every time
+   the ground turns over.
 
    `--shadow` is pinned black here rather than inherited: on #4B2BEE the pair
    above has already turned it white for white type, and a white offset under a
@@ -493,9 +496,11 @@ body {
 
 .menu-creature {
   display: block;
-  /* Its own pair, not --ink/--paper: it inverts for the black loading screen,
-     but must stay black on all six menu colours, where --ink turns over on
-     #4B2BEE for the type's sake and the creature is furniture, not type. */
+  /* The fallback pair, for the instance that is given no colour: the loading
+     screen's mascot, which inverts with `data-theme="dark"` below. On the menu
+     the head is painted from `MenuColor.creature` as an inline `fill` and the
+     eyes are literal white, so neither token applies there - the creature is a
+     picture on that screen, not type, and takes no part in --ink's turn-over. */
   --creature-head: #000000;
   --creature-eye: #ffffff;
   /* Twice the width the word took: a drawing needs room type does not. In
@@ -504,6 +509,33 @@ body {
   width: max(144px, calc(var(--cell) * 10.8));
   height: auto;
   overflow: visible;
+}
+
+/* The mascot as a control: a reset, a cursor and a focus ring, and nothing
+   that moves. Every bit of the shake's geometry is sampled in
+   lib/menuCreature.ts and written onto the SVG's outer group, so there is no
+   `transition`, `animation` or `:active` transform here to disagree with it.
+
+   The cursor stays `pointer` for the whole run. It briefly turned to
+   `progress`, and that was wrong twice over: the shake is the page answering
+   the press rather than a wait imposed on the player, and a spinner beside a
+   creature that is visibly already doing the thing reads as a page that has
+   stalled. Nothing here changes its looks mid-run, so the button carries no
+   shaking attribute either - `aria-busy` alone announces it. */
+.menu-creature-button {
+  display: block;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 10%;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.menu-creature-button:focus-visible {
+  outline: max(2px, calc(var(--cell) * 0.1)) solid var(--ink);
+  outline-offset: max(4px, calc(var(--cell) * 0.2));
 }
 
 /* The caption, sized as one thing: every size is the usual `--cell` multiple

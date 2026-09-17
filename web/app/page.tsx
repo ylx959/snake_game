@@ -75,10 +75,12 @@ export default function Home() {
   const palette = phase === "solo" ? paletteAt(session.solo?.palette ?? 0) : null;
   const onBoard = palette !== null || view?.mode === "group";
 
-  // The third theme: six flat colours on a timer, an attract screen. The hook
-  // drives the background colour and nothing else; the rest of the pair is the
-  // `data-theme="pop"` block in globals.css.
-  const menu = useMenuPop(phase === "menu");
+  // The third theme: six flat colours, and no longer an attract loop. The
+  // colour advances only when the mascot has finished a shake a player asked
+  // for, so the hook holds the index and the creature owns the clock. It
+  // supplies the ground, the type's direction and the mascot's own colour; the
+  // rest of the pair is the `data-theme="pop"` block in globals.css.
+  const menu = useMenuPop();
   const theme = onBoard ? undefined : phase === "menu" ? "pop" : "dark";
 
   return (
@@ -129,6 +131,8 @@ export default function Home() {
               leaderboard={session.leaderboard}
               error={session.error}
               dismissError={session.dismissError}
+              creatureColor={menu.color.creature}
+              onCreatureShakeComplete={menu.advance}
             />
           )}
 

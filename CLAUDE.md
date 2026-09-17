@@ -130,11 +130,20 @@ Two places bend that rule, both deliberately:
   inherited as a *computed* value, so a subtree would keep `body`'s black no
   matter what the theme redefined `--ink` to.
 
-  **The menu is a third theme, `data-theme="pop"`.** It is an attract screen:
-  `MENU_COLORS` in `web/lib/palette.ts` is six flat colours and
-  `hooks/useMenuPop.ts` steps through them on a 5.6s timer. The server is not
-  involved and never was — a menu is not a run, so unlike solo's flip the colour
-  reports nothing; it is there so the title page is not still.
+  **The menu is a third theme, `data-theme="pop"`.** `MENU_COLORS` in
+  `web/lib/palette.ts` is six entries, and each holds three independent facts:
+  `bg`, the ground; `ink`, the measured direction of the type on it; and
+  `creature`, the colour the mascot's head wears in front of it. The server is
+  not involved and never was — a menu is not a run, so unlike solo's flip the
+  colour reports nothing.
+
+  **The colour advances by hand, and only the mascot advances it.** It was an
+  attract screen on a 5.6s timer; `hooks/useMenuPop.ts` now owns nothing but the
+  index and an `advance()`, and the only caller is a creature that has
+  *finished* a shake. There is no `setInterval` left in that file and no
+  `active` parameter, because there is nothing left to pause. The six
+  ground/creature pairs are pinned exactly in `test/palette.test.mjs` — retuning
+  one there is retuning the assertion.
 
   **The pop is the ground alone; the interface on it is black.** Every card is
   `tone="ink"` and the home view's three buttons flip the same five tokens via
@@ -142,7 +151,9 @@ Two places bend that rule, both deliberately:
   on all six colours. A button that turned over with the ground would be more
   of the flashing rather than a thing the flashing passes behind, and this is
   the one screen where somebody has to read a leaderboard and type a name into
-  a box, which is also why the hold is 5.6s rather than the 3.2s it started at. Both of those rules pin `--shadow` black: the ink pairing casts a
+  a box — which used to be why the timed hold was 5.6s rather than the 3.2s it
+  started at, and is now why the player changes the colour themselves or it does
+  not change at all. Both of those rules pin `--shadow` black: the ink pairing casts a
   *white* shadow because it normally sits on black (the Game Over card), and
   white on #FFE93D is a haze rather than a drop shadow. The type standing
   directly on the ground — the lede and the note — is the only thing that takes
@@ -151,14 +162,15 @@ Two places bend that rule, both deliberately:
   Two things about it are load-bearing:
 
   - **Nothing on the menu moves when the colour changes.** The buttons, the
-    cards and the nickname field hold still under every switch, which is why the
-    timer needs no "pause while typing" guard. Three earlier versions moved
+    cards and the nickname field hold still under every switch — which is why
+    the colour never needed a "pause while typing" guard even back when a timer
+    drove it. Three earlier versions moved
     something — the whole overlay, then the ground itself, then the `SNAKE`
     title, which punched and rattled on every step while an RGB split blew its
     three colour channels apart on the same 640ms. All three are gone, and so is
-    the `ChromaticText` component that drew the split. What is alive on this
-    screen now is the mascot, and it keeps its own clock: see **The heading is a
-    creature** below.
+    the `ChromaticText` component that drew the split. The one thing that moves
+    on this screen now is the mascot, and it moves only when pressed and keeps
+    its own clock: see **The heading is a creature** below.
   - **Each colour carries its own `ink`, and it is measured.** Five of the six
     take black type; `#4B2BEE` is 2.9:1 against black and 7.3:1 against white,
     so it alone turns the pair over, via `data-ink="white"`. Retuning a hex here
@@ -183,7 +195,7 @@ Two places bend that rule, both deliberately:
   ground still pops.
 
   **The heading is a creature, not a word — on every screen that has one.** The
-  home view's `h1` holds the favicon drawn large — one rounded square, two
+  home view's heading block holds the favicon drawn large — one rounded square, two
   capsules — and so does the loading screen's; there is no text heading left in
   the app and no `.title` rule for one. It watches the pointer:
   `web/lib/menuCreature.ts` is the whole model (normalize a
@@ -206,19 +218,59 @@ Two places bend that rule, both deliberately:
     origin handling is where browsers still differ, and the default would shut
     the eyes upward into the forehead.
 
-  **Its two colours are its own tokens**, `--creature-head` and
-  `--creature-eye`, not `--ink` / `--paper`. It has to invert for the black
-  loading screen, but it must *not* follow the theme: the menu turns `--ink`
-  over on `#4B2BEE` for the sake of the type, and the creature is furniture on
-  that screen rather than type — black on all six colours, like every button and
-  card. One `.screen[data-theme="dark"]` rule flips the pair and nothing else
-  does.
+  **On the menu the creature is also the button that changes the colour.** One
+  press runs one shake — `SHAKE_DURATION_SECONDS` is 1.5 — and the ground and
+  the head advance one entry when that run *finishes*, never when it starts.
+  Four things about it are load-bearing:
+
+  - **The shake is an outer-body transform; the gaze and the blink are inner
+    ones.** `shakePoseAt` writes one group wrapping the head, so the eyes go on
+    tracking the pointer and blinking all the way through a shake. Nothing about
+    the aim knows the body is moving, which is why neither had to learn about
+    the other.
+  - **One activation runs to the end, and a second is ignored rather than
+    queued.** A `shakingRef` guards it, not the `useState` beside it: state
+    lands a render later and two quick presses would both get through. Releasing
+    the pointer early does not stop the run, and holding past 1.5s does not
+    start another — `pointerdown` starts the run and `onClick` starts only the
+    zero-`detail` keyboard/assistive-technology click, so a pointer's eventual
+    click cannot start a second one.
+  - **The clock is the existing `requestAnimationFrame`, not a `setTimeout`.**
+    The run is a start timestamp and a sampled elapsed time, so the colour
+    change cannot drift away from the frame that drew the last of the shake. The
+    cleanup clears the run before cancelling the frame: an unmounted creature
+    must not advance a colour on a screen that has gone.
+  - **Reduced motion keeps the run and drops only the movement.**
+    `shakePoseAt(t, true)` is neutral at every `t`, so the button is busy for its
+    1.5s and advances once with no lateral motion. The colour change is the
+    point; the shaking is the decoration. The component re-reads
+    `matchMedia` on `change`, so turning the preference on mid-session takes.
+
+  The menu instance paints its head from `MenuColor.creature` as an inline
+  `fill` and its eyes literal white. The loading screen renders the same
+  component with **no props**, which is what keeps it a non-interactive mascot
+  on its own two tokens — the union type admits both props or neither, so there
+  is no half-interactive third case.
+
+  **Its two tokens** — `--creature-head` and `--creature-eye`, not `--ink` /
+  `--paper` — are the *propless* instance's colours, and the loading screen is
+  the one that uses them: it has to invert for a black ground, but it must not
+  follow the theme, since the menu turns `--ink` over on `#4B2BEE` for the sake
+  of the type and the creature is a picture rather than type. One
+  `.screen[data-theme="dark"]` rule flips the pair and nothing else does. The
+  menu instance takes neither token: its head is the pair's `creature` hex and
+  its eyes are white on all six grounds.
 
   Touch pointers are ignored (a lifted finger leaves no cursor to follow) and
   `pointerleave` returns the *target* to neutral so the easing carries the gaze
   back rather than snapping it. `approachCreatureAim` clamps `dt` at 64ms, which
   is what keeps a backgrounded tab from snapping the head to the pointer on the
   frame it is looked at again.
+
+  On the menu the visually hidden `Snake` `h1` and the creature button are
+  *siblings* inside `.menu-creature-heading`, not nested: a control inside the
+  heading folds its own label into the heading's accessible name. The loading
+  screen, whose creature is not a control, still puts it in the `h1`.
 
   The mascot is sized at `--cell * 10.8` and the caption under it —
   `.home-below`, holding the lede, the three buttons and the note — is the

@@ -8,9 +8,11 @@
  * four cards is showing and has no bearing on anything the server knows. The
  * moment a command goes up, the server's reply moves the whole session on.
  *
- * Every card is `tone="ink"` on a ground that changes colour every 5.6s: the
- * interface holds still and the background moves. Only the lede and the note
- * take the measured pair; the heading is the mascot. See globals.css.
+ * Every card is `tone="ink"` on a ground that changes colour only when the
+ * mascot has finished a shake: the interface holds still and the background
+ * moves, and it moves because somebody asked it to rather than on a timer.
+ * Only the lede and the note take the measured pair; the heading is the
+ * mascot, which is also the button. See globals.css.
  */
 
 import { useEffect, useState } from "react";
@@ -32,6 +34,8 @@ export function MenuScreen({
   leaderboard,
   error,
   dismissError,
+  creatureColor,
+  onCreatureShakeComplete,
 }: {
   send: (message: ClientMessage) => void;
   nickname: string | null;
@@ -39,6 +43,8 @@ export function MenuScreen({
   leaderboard: LeaderboardEntry[] | null;
   error: string | null;
   dismissError: () => void;
+  creatureColor: string;
+  onCreatureShakeComplete: () => void;
 }) {
   const [view, setView] = useState<View>("home");
   const [draft, setDraft] = useState("");
@@ -86,10 +92,14 @@ export function MenuScreen({
   if (view === "home") {
     return (
       <div className="screenful screenful--home">
-        <h1 className="menu-creature-heading">
-          <span className="visually-hidden">Snake</span>
-          <MenuCreature />
-        </h1>
+        {/* The button sits beside the heading rather than inside it: a
+            control inside an `h1` folds its label into the heading's
+            accessible name. One `Snake` heading, one separately named
+            button. */}
+        <div className="menu-creature-heading">
+          <h1 className="visually-hidden">Snake</h1>
+          <MenuCreature color={creatureColor} onShakeComplete={onCreatureShakeComplete} />
+        </div>
         {/* The caption, in one box so it sizes as one thing: 0.9 of the usual
             scale and held down, so it and the mascot are not equals. */}
         <div className="home-below">
