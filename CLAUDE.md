@@ -154,10 +154,11 @@ Two places bend that rule, both deliberately:
     cards and the nickname field hold still under every switch, which is why the
     timer needs no "pause while typing" guard. Three earlier versions moved
     something — the whole overlay, then the ground itself, then the `SNAKE`
-    title, which punched and rattled on every step (`menu-pop-*`) while
-    `chroma-hit-*` blew `ChromaticText`'s channels apart on the same 640ms. All
-    three are gone. What is alive on this screen now is the mascot, and it keeps
-    its own clock: see **The heading is a creature** below.
+    title, which punched and rattled on every step while an RGB split blew its
+    three colour channels apart on the same 640ms. All three are gone, and so is
+    the `ChromaticText` component that drew the split. What is alive on this
+    screen now is the mascot, and it keeps its own clock: see **The heading is a
+    creature** below.
   - **Each colour carries its own `ink`, and it is measured.** Five of the six
     take black type; `#4B2BEE` is 2.9:1 against black and 7.3:1 against white,
     so it alone turns the pair over, via `data-ink="white"`. Retuning a hex here
@@ -172,25 +173,20 @@ Two places bend that rule, both deliberately:
   shadow that type wears here and `--fg` would put a white shadow under white
   type on `#4B2BEE`. It used to be black for a sharper reason — the title was
   `ChromaticText`, whose three channels screen back to *white* through the body
-  of every glyph, and white on `#22DFF5` is 1.4:1, so the black offset was the
-  only edge it read against. That title is gone; the token stays black for the
-  plainer reason.
-
-  One consequence outlived the title: `.chroma` still carries `--split-base` as
-  well as `--split`, which used to be so `chroma-hit-*` could write the knock in
-  multiples of the resting split (a keyframe cannot use `--split` as its own
-  basis). Nothing animates it now, and the pair survives only as the
-  `round()` fallback idiom — one name declared twice so an unsupported line can
-  be thrown away.
+  of every glyph, so the black offset was the only edge it read against. Both
+  the title and that component are gone; the token stays black for the plainer
+  reason.
 
   **The whole theme was deleted once, and putting it back is the reason this
   section is long.** "The interface should be black" was read as "the menu
   should be black", and the pop went with it. Black is the *controls*; the
   ground still pops.
 
-  **The heading is a creature, not a word.** The home view's `h1` holds the
-  favicon drawn large — one black rounded square, two white capsules — and it
-  watches the pointer: `web/lib/menuCreature.ts` is the whole model (normalize a
+  **The heading is a creature, not a word — on every screen that has one.** The
+  home view's `h1` holds the favicon drawn large — one rounded square, two
+  capsules — and so does the loading screen's; there is no text heading left in
+  the app and no `.title` rule for one. It watches the pointer:
+  `web/lib/menuCreature.ts` is the whole model (normalize a
   pointer position to a signed unit aim, ease it exponentially, project it onto
   head and eye transforms, sample a blink from elapsed seconds), and
   `web/components/ui/MenuCreature.tsx` owns the one thing that cannot be pure,
@@ -209,6 +205,14 @@ Two places bend that rule, both deliberately:
     translate/scale/translate rather than left to `transform-origin`: SVG's
     origin handling is where browsers still differ, and the default would shut
     the eyes upward into the forehead.
+
+  **Its two colours are its own tokens**, `--creature-head` and
+  `--creature-eye`, not `--ink` / `--paper`. It has to invert for the black
+  loading screen, but it must *not* follow the theme: the menu turns `--ink`
+  over on `#4B2BEE` for the sake of the type, and the creature is furniture on
+  that screen rather than type — black on all six colours, like every button and
+  card. One `.screen[data-theme="dark"]` rule flips the pair and nothing else
+  does.
 
   Touch pointers are ignored (a lifted finger leaves no cursor to follow) and
   `pointerleave` returns the *target* to neutral so the easing carries the gaze
@@ -506,36 +510,6 @@ Rendering details that are load-bearing:
   no `getBoundingClientRect`, and no second copy of the fit. It sits *across*
   the heading, never along it: a snake running down has its own body directly
   above its head, so "above the head" is on the body half the time.
-- **The RGB split is three colour channels screened together**
-  (`components/ui/ChromaticText.tsx`), used on the solo Game Over score — and
-  only there, since the menu title became the mascot. Two details are
-  load-bearing. It assumes a **dark ground** — `screen` over a light background
-  only lightens it, so the fringes wash out. The Game Over card supplies one: it
-  is `tone="ink"` for exactly this reason. The menu was its other home and went
-  through both ways of failing to supply one — black at first, then one of six
-  flat colours leaning on a black `--emboss` for an edge — before the heading
-  stopped being type at all. Moving it anywhere else means checking what is
-  behind it first.
-  And the word is in the DOM **once**: the element's own text is the green
-  channel and `::before`/`::after` redraw it from `data-text`. An earlier
-  version used three real spans with two `aria-hidden`, and the heading's
-  accessible name came out `SnakeSnakeSnake` — a name is computed from an
-  element's contents, and that walk is not a reliable place to lean on
-  `aria-hidden`. The `/ ""` in the `content` shorthand gives the generated text
-  empty alternative text so assistive technology skips it too. Both `content`
-  declarations and both `--split-base` declarations are **fallback pairs**, not
-  duplicates: an unsupported `round()` or `/ ""` invalidates its own line and
-  the plainer one above survives.
-
-  **`chroma-jolt`'s percentages are tied to its period, so the two move
-  together.** The two channels drift on 12s and 17s and jolt on 11s and 9.3s —
-  all four deliberately out of step, because two channels that sync up stop
-  reading as an aberration and start reading as the whole word wobbling. The
-  jolt keyframe is `none` until 95.5%: it is a *snap*, and how long that snap
-  lasts is that percentage times the period, so lengthening the period alone
-  stretches the snap into a slow wobble. The last change — 6.5s to 11s — moved
-  91% to 95.5% for exactly this reason, which keeps the snap at the 0.45s it
-  has always been and only makes it rarer.
 - `.board` and `.ui` carry explicit `z-index` (0 and 1) inside an
   `isolation: isolate` stage. Without them the order is only *implied* by DOM
   order, and a canvas repainting eight times a second is exactly the thing a
@@ -545,10 +519,13 @@ Rendering details that are load-bearing:
 `Panel` takes a `tone`. "paper" follows the screen — white on a solo run, black
 on the dark screens. "ink" is always black with white type, for a card that has
 to be dark for its *contents’* sake rather than its screen’s: the Game Over
-card is ink because the chromatic score sitting in it needs a dark ground. The
-ink rule redefines the same tokens `.screen[data-theme="dark"]` does, scoped to
-one card — and re-declares `color: var(--ink)` for the same reason that one
-does: `color` inherits as a computed value, so redefining `--ink` alone would
+card is ink so the run's final score lands on black however bright the board it
+was played on. It was ink first because the score used to be drawn with an RGB
+split, which needs a dark ground; that effect is gone and the card stays black
+because a result should read as a result. The ink rule redefines the same
+tokens `.screen[data-theme="dark"]` does, scoped to one card — and re-declares
+`color: var(--ink)` for the same reason that one does: `color` inherits as a
+computed value, so redefining `--ink` alone would
 leave the subtree on the colour it already inherited.
 
 `.controls` hides itself while solo `status === "running"` (`data-hidden` in

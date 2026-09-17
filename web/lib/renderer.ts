@@ -103,10 +103,9 @@ function shape(cells: readonly Cell[], snake: SnakeEnds): LitCell[] {
 }
 
 /**
- * The cells of every snake in a view, for the DOM text mask to clip against.
- *
- * Shaped, not bare: the mask has to be the *same silhouette* the canvas paints,
- * rounded ends included, or the lit text sits visibly off the snake.
+ * The cells of every snake, for the DOM text mask to clip against. Shaped, not
+ * bare: the mask must be the same silhouette the canvas paints, rounded ends
+ * included, or the lit text sits visibly off the snake.
  */
 export function litCells(view: BoardView | null): LitCell[] {
   if (!view) return [];
@@ -386,21 +385,11 @@ export class Renderer {
   }
 
   /**
-   * One cell, filled. A snake segment takes the whole cell (`inset` 0); the
-   * apple is inset so it reads as an object rather than a wall tile.
-   *
-   * `fillRect` unless a corner is asked for. The edges `bounds()` hands back
-   * are whole pixels and neighbours share them exactly, so a body cell tiles
-   * with no seam and nothing on it is ever antialiased. Only the two ends of a
-   * snake round - see `lib/snakeEnds.ts` - and only their outward corners, so
-   * every edge a segment shares with the next one is still a hard square.
-   *
-   * The radius comes off the *whole* cell rather than the inset one, so the
-   * canvas and `LitText`'s mask work from the same number. Nothing rounded is
-   * ever inset today, but the two would silently disagree if one ever were.
-   *
-   * Never translucent. Distance is the spotlight's job, laid over the finished
-   * board; a cell drawn here is drawn at full strength.
+   * One cell, filled. `fillRect` unless a corner is asked for: `bounds()` hands
+   * back whole pixels that neighbours share, so a body cell tiles with no seam.
+   * The radius comes off the whole cell, not the inset one, so the canvas and
+   * LitText's mask work from the same number. Never translucent - distance is
+   * the spotlight's job, laid over the finished board.
    */
   private fillCell(cell: Cell, color: string, corners: Corners = SQUARE, inset = 0): void {
     const { ctx } = this;
@@ -416,7 +405,7 @@ export class Renderer {
       return;
     }
 
-    // `roundRect` takes the four radii in the same order `Corners` is written.
+    // `roundRect` takes the radii in the order `Corners` is written.
     ctx.beginPath();
     ctx.roundRect(
       left + padX,

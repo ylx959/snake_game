@@ -8,15 +8,10 @@
  * the page looks alive while a player is deciding, which is the one screen in
  * this game where nothing is happening.
  *
- * It never pauses, not even while a player is part way through typing a
- * nickname. It does not have to: nothing on the page moves with it. The
- * buttons, the cards and the fields hold perfectly still under every switch,
- * and the mascot at the top of the home view has a clock of its own that owes
- * this one nothing. An earlier version shook the whole overlay and did need a
- * guard; one after it knocked the title on every switch, which is why this hook
- * used to hand back an alternating `beat` for CSS to restart an animation with.
- * The title is a creature now and there is no animation left to restart, so the
- * colour is all this returns.
+ * It never pauses, not even mid-nickname, because nothing moves with it: the
+ * buttons, cards and fields hold still, and the mascot keeps its own clock.
+ * Two earlier versions shook the overlay and then the title, and the second is
+ * why this used to return an alternating `beat` to restart a CSS animation.
  */
 
 import { useEffect, useState } from "react";

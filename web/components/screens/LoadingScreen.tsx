@@ -15,9 +15,10 @@
 
 import { useEffect, useState } from "react";
 
+import { MenuCreature } from "@/components/ui/MenuCreature";
 import type { ConnectionStatus } from "@/types/game";
 
-/** The little snake that runs along under the title while we wait. */
+/** The little snake that runs along under the mascot while we wait. */
 const TRACK = 14;
 const CRAWL_MS = 110;
 
@@ -53,7 +54,10 @@ export function LoadingScreen({
 
   return (
     <div className="screenful">
-      <h1 className="title">Snake</h1>
+      <h1 className="menu-creature-heading">
+        <span className="visually-hidden">Snake</span>
+        <MenuCreature />
+      </h1>
       <Crawl />
       <p className="lede" role="status">
         {failed ? "Cannot reach the game server" : "Waking the game server"}

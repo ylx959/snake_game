@@ -72,18 +72,10 @@ export interface FoggedSnake {
   /** The head, when it is drawn. `null` means no eyes are drawn either. */
   head: Cell | null;
   /**
-   * The tail, when it is drawn, and which way it points - both `null` when the
-   * fog has taken it.
-   *
-   * They are here rather than read off the end of `cells` because `cells` is
-   * what survived the cull: an opponent whose real tail is out of range still
-   * has a last *visible* cell, and rounding that one would draw a nose on a cut
-   * the fog made. Measured on the whole snake, then dropped if it is not drawn.
-   *
-   * `beforeTail` is the cell one in from the tail: `lib/snakeEnds.ts` turns the
-   * pair into which way the tail faces. This file says where things are and
-   * that one says what it means, the same way existence and brightness are
-   * split.
+   * The tail and the cell in front of it, both `null` when the fog took them.
+   * Not read off the end of `cells`, which is only what survived the cull:
+   * rounding that would draw a nose on a cut the fog made. `lib/snakeEnds.ts`
+   * turns the pair into a heading - this file says where, that one says what.
    */
   tail: Cell | null;
   beforeTail: Cell | null;
@@ -212,10 +204,7 @@ export function applyFog(state: MultiplayerState, you: string | null): FoggedBoa
           // The eyes are part of the head, so they follow it exactly: a head
           // outside the radius takes its eyes with it.
           head: head !== undefined && drawn(head, own) ? head : null,
-          // The rounded end goes the same way, and for the same reason. The
-          // cell in front of the tail comes with it so `lib/snakeEnds.ts` can
-          // work out which way the tail faces - both are read off the *whole*
-          // snake, before the cull, so the fog's own cut never gets a nose.
+          // Both read off the *whole* snake, before the cull.
           tail: tailShown ? tail : null,
           beforeTail: tailShown ? (snake.cells[snake.cells.length - 2] ?? null) : null,
         };

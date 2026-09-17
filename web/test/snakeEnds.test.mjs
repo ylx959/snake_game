@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { cellRoundedPath } from "../lib/board.ts";
-import { SQUARE, cornersOf, endRadius, ends, headingFrom } from "../lib/snakeEnds.ts";
+import { END_RADIUS, SQUARE, cornersOf, endRadius, ends, headingFrom } from "../lib/snakeEnds.ts";
 
 /** A snake running right to left: head at the right-hand end. */
 const RUN = [
@@ -41,8 +41,17 @@ test("an end the fog has taken rounds nothing, so a cut is not a nose", () => {
 });
 
 test("the radius is whole pixels, and a small cell rounds to nothing", () => {
-  assert.equal(endRadius(40, 40), 12);
-  assert.equal(endRadius(10, 10), 3);
+  // Derived from END_RADIUS, not pinned to it: the look is meant to be retuned
+  // by that one number, and a test that hardcodes today's value only makes
+  // turning the dial fail the build.
+  assert.equal(endRadius(40, 40), Math.round(40 * END_RADIUS));
+  assert.ok(Number.isInteger(endRadius(33, 33)), "never a fraction of a pixel");
+
+  // The shorter side decides, so a cell that is not square cannot over-round.
+  assert.equal(endRadius(40, 20), endRadius(20, 40));
+  assert.equal(endRadius(40, 20), Math.round(20 * END_RADIUS));
+
+  // Small enough and it gives up rather than chewing the corner.
   assert.equal(endRadius(1, 1), 0);
 });
 

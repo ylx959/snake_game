@@ -1,52 +1,25 @@
 /**
- * Which corners of a snake cell are rounded.
- *
- * The snake is drawn as hard squares - that is the pixel grid the whole board
- * is built on - with two exceptions: the leading edge of the **head** and the
- * trailing edge of the **tail**. Those two ends are the only places a snake
- * stops, so they are the only places a corner is not shared with another
- * segment. Rounding anything else would put a notch in the middle of a body
- * that is meant to read as one continuous run.
- *
- * Only *two* corners round at each end, never four. A head with four round
- * corners pulls away from its own neck: the two corners it shares with the
- * segment behind it have to stay square, or a pinch of background shows through
- * the join every tick.
- *
- * Framework-free like the rest of `lib/`, and used by both things that draw the
- * snake's silhouette - `Renderer` paints it on the canvas and `LitText` masks
- * the white readouts with it. They must agree to the pixel, so the rule lives
- * here rather than in either of them.
+ * Which corners of a snake cell are rounded: the head's leading edge and the
+ * tail's trailing edge, two corners each, and nothing else. Both the canvas and
+ * LitText's mask read it from here, so they cannot disagree by a pixel.
  */
 
 import type { Cell, Direction } from "@/types/game";
 
 /**
- * The corner radius, as a fraction of the cell's shorter side.
- *
- * Turn this one number up for a softer nose. Both consumers round it to whole
- * pixels from the same cell size, so on a small board it lands on 0 and the
- * ends go square on their own - which is what you want: a 2px radius on an 8px
- * cell is not a rounded corner, it is a chewed one.
+ * The corner radius, as a fraction of the cell's shorter side. Turn this one
+ * number up for a softer nose; both consumers round it to whole pixels, so a
+ * small board lands on 0 and goes square on its own.
  */
 export const END_RADIUS = 0.15;
 
-/**
- * One cell's four corners, in the order `roundRect` and CSS both use:
- * top-left, top-right, bottom-right, bottom-left.
- */
+/** One cell's corners, in the order `roundRect` and CSS use: tl, tr, br, bl. */
 export type Corners = readonly [boolean, boolean, boolean, boolean];
 
 export const SQUARE: Corners = [false, false, false, false];
 const ALL: Corners = [true, true, true, true];
 
-/**
- * The two corners on the far side of a cell, looking along `heading`.
- *
- * For a head that is the leading edge - the face nothing is in front of. For a
- * tail it is the same function read backwards: the tail's heading points *away*
- * from the body, so its far side is the end of the snake.
- */
+/** The two corners on the far side of a cell, looking along `heading`. */
 const FAR_SIDE: Record<Direction, Corners> = {
   UP: [true, true, false, false],
   DOWN: [false, false, true, true],
@@ -54,13 +27,7 @@ const FAR_SIDE: Record<Direction, Corners> = {
   RIGHT: [false, true, true, false],
 };
 
-/**
- * Which way you are travelling going from one cell to the next one along.
- *
- * `null` when there is nothing to measure - the same cell twice, or a missing
- * one. The body is a contiguous run, so in practice the two always differ on
- * exactly one axis by exactly one.
- */
+/** Which way you travel going from one cell to the next. */
 export function headingFrom(from: Cell | null, to: Cell | null): Direction | null {
   if (from === null || to === null) return null;
   const [x, y] = to;
@@ -71,19 +38,9 @@ export function headingFrom(from: Cell | null, to: Cell | null): Direction | nul
 }
 
 /**
- * The two ends of one snake: where they are, and what is behind the tail.
- *
- * Both cells are nullable because a shared board culls what is too far away to
- * see (`lib/vision.ts`). A culled end is simply absent, and then *nothing*
- * rounds - which is right: the cut where the fog stops is not the snake's end,
- * and giving it a nose would say an opponent finishes where it does not.
- *
- * `beforeTail` is the cell one in from the tail, and it is a *cell* rather than
- * a heading on purpose. It lets `lib/vision.ts` fill this in with nothing but
- * array indexing: the fog reports where things are and this file decides what
- * that means for a corner, which is the same split the two already have over
- * existence and brightness. It also keeps `vision.ts` free of value imports,
- * which is what lets `node --test` load it without tsconfig's `@/` alias.
+ * One snake's two ends, nullable because the fog culls what is too far to see
+ * and its cut must round nothing. `beforeTail` is a cell, not a heading, so
+ * `lib/vision.ts` fills it in by indexing and stays free of value imports.
  */
 export interface SnakeEnds {
   head: Cell | null;
@@ -105,10 +62,9 @@ export function ends(cells: readonly Cell[], direction: Direction): SnakeEnds {
 const same = (a: Cell, b: Cell): boolean => a[0] === b[0] && a[1] === b[1];
 
 /**
- * The corners to round on one cell.
- *
- * A one-cell snake is its own head and tail - it has no neighbour to keep a
- * corner square for - so it rounds all four and reads as the pill it is.
+ * The corners to round on one cell. Never four at an end: the corners shared
+ * with the next segment stay hard, or a pinch of background shows through the
+ * join. A one-cell snake has no neighbour to keep one for, so it rounds fully.
  */
 export function cornersOf(cell: Cell, snake: SnakeEnds): Corners {
   const isHead = snake.head !== null && same(cell, snake.head);
@@ -118,8 +74,7 @@ export function cornersOf(cell: Cell, snake: SnakeEnds): Corners {
   if (isHead) return FAR_SIDE[snake.direction];
 
   if (isTail) {
-    // Away from the body, not along it: the tail's free face is the one the
-    // segment in front of it is not touching.
+    // Away from the body: the face the segment in front is not touching.
     const heading = headingFrom(snake.beforeTail, snake.tail);
     if (heading !== null) return FAR_SIDE[heading];
   }
@@ -127,7 +82,7 @@ export function cornersOf(cell: Cell, snake: SnakeEnds): Corners {
   return SQUARE;
 }
 
-/** The radius in whole pixels for a cell of this size, 0 when it is too small. */
+/** The radius in whole pixels, 0 when the cell is too small to bother. */
 export function endRadius(width: number, height: number): number {
   return Math.round(Math.min(width, height) * END_RADIUS);
 }

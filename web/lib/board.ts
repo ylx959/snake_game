@@ -36,21 +36,10 @@ export function cellRectPath(left: number, top: number, width: number, height: n
 }
 
 /**
- * One cell as an SVG path with some of its corners rounded.
- *
- * The rounded ends of the snake - see `lib/snakeEnds.ts` - have to exist in the
- * mask as well as in the paint, so `LitText` builds them from here and
- * `Renderer` draws the same corners with `roundRect`. A radius of 0, or no
- * rounded corner at all, falls straight back to `cellRectPath`: a body cell is
- * a plain rectangle and stays byte-for-byte the path it always was, so
- * neighbours go on sharing their edges exactly.
- *
- * Clockwise, starting at the top-left corner's end, because the whole snake is
- * one concatenated `path()` filled with the nonzero rule - every subpath has to
- * wind the same way or overlapping cells would cancel instead of union.
- *
- * The radius is never allowed past half the cell: two corners on one side
- * asking for more than the side is long would make the arcs cross.
+ * One cell as an SVG path with some corners rounded - the snake's ends, which
+ * the mask has to carry as well as the paint. No corner or no radius falls back
+ * to `cellRectPath`, so a body cell stays exactly the path it always was.
+ * Clockwise, because the whole snake is one `path()` filled with nonzero.
  */
 export function cellRoundedPath(
   left: number,

@@ -15,7 +15,7 @@
  *
  * The one hard rule: this mask and `Renderer`'s paint are the same silhouette,
  * rounded ends included. Neither computes it - `lib/board.ts` and
- * `lib/snakeEnds.ts` hold the shape, and both read it from there.
+ * `lib/snakeEnds.ts` hold the shape.
  */
 
 import { useEffect, useRef, useState, type ComponentPropsWithoutRef, type RefObject } from "react";
@@ -56,10 +56,8 @@ function useSnakeClip(ref: RefObject<HTMLElement | null>, view: BoardView | null
     const cellWidth = board.width / shape.cols;
     const cellHeight = board.height / shape.rows;
 
-    // The rounded ends of each snake are part of the silhouette, so the mask
-    // carries them too. Both sides take the radius from `endRadius` and the
-    // same whole-pixel cell size, so the mask and the paint round identically -
-    // a single pixel of disagreement shows as white text hanging off the nose.
+    // Both sides take the radius from `endRadius` and the same whole-pixel cell
+    // size: one pixel of disagreement hangs the white text off the nose.
     const path = litCells(view)
       .map(({ cell: [x, y], corners }) => {
         const [left, width] = cellEdges(x, cellWidth);

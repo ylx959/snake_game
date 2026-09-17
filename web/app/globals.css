@@ -483,30 +483,9 @@ body {
   text-align: center;
 }
 
-.title {
-  margin: 0;
-  font-size: max(20px, calc(var(--cell) * 2.4));
-  letter-spacing: 0.14em;
-  /* The drop shadow the buttons wear, on the one word the page is named for. */
-  text-shadow: 0.08em 0.08em 0 var(--emboss);
-}
-
-/* The menu's heading is a picture, not a word.
-
-   The `h1` is still there and is still named "Snake" - the name is in a
-   visually hidden span, so the document keeps exactly one level-one heading
-   and assistive technology hears the page's name. What is *seen* is the
-   mascot, which is `aria-hidden` so the name is not announced twice.
-
-   `line-height: 0` because the heading's only child is now a block-level SVG:
-   left alone, the line box would add a strip of leading under it and push the
-   lede away from the creature by an amount that has nothing to do with `--cell`.
-
-   Sized in cells like everything else on the stage, with a pixel floor for the
-   same reason the type has one - below about 72px the rounded square and the
-   two capsules stop being a face and become a smudge. `overflow: visible`
-   because the head leans and tips outside its own box; the viewBox gives it
-   room, but a UA that clips would take the corner off. */
+/* The heading is a picture: a visually hidden "Snake" keeps the accessible
+   name, the mascot is aria-hidden so it is not announced twice, and
+   `line-height: 0` stops the line box adding leading under a block-level SVG. */
 .menu-creature-heading {
   margin: 0;
   line-height: 0;
@@ -514,31 +493,22 @@ body {
 
 .menu-creature {
   display: block;
-  /* Twice the width the word it replaced occupied. A drawing needs the room
-     that type does not: at the old size the head read as an icon dropped above
-     the menu, and at this one it is the thing the page is, with the menu as its
-     caption. Still one number - it is in cells, so it scales with the board. */
+  /* Its own pair, not --ink/--paper: it inverts for the black loading screen,
+     but must stay black on all six menu colours, where --ink turns over on
+     #4B2BEE for the type's sake and the creature is furniture, not type. */
+  --creature-head: #000000;
+  --creature-eye: #ffffff;
+  /* Twice the width the word took: a drawing needs room type does not. In
+     cells, so it scales with the board; floored because below ~144px the
+     square and the two capsules stop being a face. */
   width: max(144px, calc(var(--cell) * 10.8));
   height: auto;
   overflow: visible;
 }
 
-/* The caption under the mascot: the lede, the three buttons and the note.
-
-   One box rather than three siblings of the heading, because it is sized as one
-   thing. Every size in it is the interface's usual size times 0.9 - the same
-   `--cell` multiples written 0.9 smaller, not a `transform: scale`, which would
-   blur the pixel font and shrink the buttons' hit areas along with their looks.
-   Button padding and the drop shadow are already in `em`, so they follow the
-   font size down on their own.
-
-   The floors drop only as far as 6px, which is where this pixel font stops
-   being readable at all; a floored size has already left the proportion behind
-   anyway.
-
-   `margin-top` holds it away from the head. The column is centred as a whole,
-   so pushing this down moves the pair down the screen together, which is the
-   point - the creature sits high and looks out over what it is introducing. */
+/* The caption, sized as one thing: every size is the usual `--cell` multiple
+   written 0.9 smaller, never a `transform: scale`, which would blur the pixel
+   font and shrink the buttons' hit areas with it. */
 .home-below {
   display: flex;
   flex-direction: column;
@@ -557,8 +527,7 @@ body {
 }
 
 .home-below .controls--stack {
-  /* The stack's own ceiling, at 0.8 too. Without this the buttons would keep
-     their full width while their type shrank inside them. */
+  /* At 0.9 too, or the buttons keep full width while their type shrinks. */
   max-width: calc(var(--cell) * 10.8);
 }
 
@@ -570,9 +539,15 @@ body {
   font-size: max(6px, calc(var(--cell) * 0.288)); /* .field__note's 0.32, at 0.9 */
 }
 
-/* Out of the picture, still in the accessibility tree. `clip` rather than
-   `display: none` or zero size, both of which take an element out of the tree
-   along with the layout. */
+/* A black head on a black screen is nothing, so the dark screens wear the
+   favicon inverted - the same drawing, the two colours the other way round. */
+.screen[data-theme="dark"] .menu-creature {
+  --creature-head: #ffffff;
+  --creature-eye: #000000;
+}
+
+/* Out of the picture, still in the accessibility tree: `clip` rather than
+   `display: none`, which would take it out of both. */
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -986,9 +961,8 @@ body {
   transform: none;
 }
 
-/* 這一行數字由 ChromaticText 畫（見 SoloScreen），所以沒有位移陰影：
-   色差效果自己就是那層「偏移的顏色」，再加一層投影只會糊掉。
-   它需要深色底才看得到色邊，那張卡片因此是 data-tone="ink"。 */
+/* Game Over 的分數。沒有位移陰影：這是整張卡片上最大的字，卡片又是
+   tone="ink"（白字黑底），對比已經夠了，再加投影只會糊掉。 */
 .bigscore {
   margin: 0;
   text-align: center;
@@ -1002,149 +976,4 @@ body {
   align-items: stretch;
   width: 100%;
   max-width: calc(var(--cell) * 12);
-}
-
-/* --- RGB split on the display type --------------------------------------- */
-
-/*
- * See components/ui/ChromaticText.tsx. One element, three colour channels: the
- * element's own text is green, and ::before / ::after redraw it red and blue
- * from `data-text`. They are composited with `mix-blend-mode: screen`, which is
- * additive - the three add back to white wherever they overlap, which is the
- * body of every glyph, and only the edges where one has slid out keep a colour.
- * Two channels overlapping give the secondaries, so a fringe runs red or blue
- * through yellow, magenta or cyan on its way to white.
- *
- * 用虛擬元素而不是三個 <span>，理由是無障礙：標題的可及名稱是從「內容」算出來
- * 的，三份真的文字會讓它變成 "SnakeSnakeSnake"。虛擬元素的內容不在 DOM 裡。
- *
- * 這個效果假設底色是黑的。screen 疊在亮底上只會更亮，色邊會整個洗掉。
- * Game Over 那張卡片是 tone="ink"，底色就是黑的；選單已經不是了（現在是六個
- * 彩色底），它改靠 --emboss 的黑色位移陰影給字一個可讀的邊——見上面
- * data-theme="pop" 那一段。
- */
-.chroma {
-  position: relative;
-  display: inline-block;
-
-  /* 綠色通道就是這個元素自己的文字。 */
-  color: #00ff00;
-
-  /* How far the outer channels sit from the middle one.
-     ⚠️ 兩行不是重複。第二行用了 round()，瀏覽器不支援就整條被丟掉，
-     於是第一行的 2px 留下來當後備——這是 CSS 唯一的「fallback」寫法。
-     round(…, 1px) 把偏移量鎖在整數像素上，理由跟 fitBoard() 把格子取整一樣：
-     這是像素字型，半格的位移會讓邊緣糊掉，而糊掉的邊緣正是這個效果的全部。
-     0.085 格在一般視窗下約等於 2px。超過 3px 就不再像鏡頭，只像壞掉。
-
-     --split 永遠等於 --split-base。分成兩個變數，是因為 fallback 那一招
-     需要一個「只被宣告、不被使用」的名字：真正畫圖的是 --split，而要被
-     重複宣告兩次、讓不支援 round() 的瀏覽器退回去的是 --split-base。
-     （選單標題以前會在換色那 640ms 把 --split 拉開成基準的好幾倍再收回來，
-     那個效果連同標題本身已經拿掉了，見 components/ui/MenuCreature.tsx。） */
-  --split-base: 2px;
-  --split-base: max(1px, round(calc(var(--cell) * 0.085), 1px));
-  --split: var(--split-base);
-
-  /* 明確建立一個混色群組，讓 screen 只跟這三個通道彼此相加，
-     而不是往外找 .ui 或 canvas 當底。跟 .board / .ui 的 z-index 同一個理由：
-     不要讓結果取決於「剛好沒有別人建立堆疊環境」。 */
-  isolation: isolate;
-}
-
-.chroma::before,
-.chroma::after {
-  /* ⚠️ 同樣是 fallback，不是重複。`/ ""` 是 CSS 規格給生成內容的「替代文字」，
-     給空字串等於告訴輔助技術跳過它；不支援的瀏覽器會丟掉那一行，
-     退回上面那行——效果照舊，只是少了那層無障礙處理。 */
-  content: attr(data-text);
-  content: attr(data-text) / "";
-  position: absolute;
-  inset: 0;
-  mix-blend-mode: screen;
-}
-
-/*
- * 位移拆成兩個屬性，不是為了好看，是因為同一個元素上的兩個 animation
- * 如果 animate 同一個屬性，後面那個會整個蓋掉前面那個。
- * `translate` 和 `transform` 是各自獨立的屬性，會依序疊加，
- * 所以「慢慢呼吸」和「偶爾抽一下」可以同時存在。
- * 兩個都只碰合成階段的屬性，不會觸發 layout。
- */
-.chroma::before {
-  color: #ff0000;
-  translate: calc(var(--split) * -1) 0;
-  animation:
-    chroma-drift-left 12s ease-in-out infinite,
-    chroma-jolt 11s steps(1, end) infinite;
-}
-
-.chroma::after {
-  color: #0000ff;
-  translate: var(--split) 0;
-  /* 週期跟紅色互質，兩邊才不會一直同步抽動。
-     12 / 17 和 11 / 9.3 都還是互質的——拉長週期的時候這件事最容易被弄丟，
-     一旦兩邊對上了，兩個通道會開始一起抽，看起來就只是整個字在晃。 */
-  animation:
-    chroma-drift-right 17s ease-in-out infinite,
-    chroma-jolt 9.3s steps(1, end) infinite;
-}
-
-@keyframes chroma-drift-left {
-  0%,
-  100% {
-    translate: calc(var(--split) * -1) 0;
-  }
-  50% {
-    translate: calc(var(--split) * -2) calc(var(--split) * -0.3);
-  }
-}
-
-@keyframes chroma-drift-right {
-  0%,
-  100% {
-    translate: var(--split) 0;
-  }
-  50% {
-    translate: calc(var(--split) * 2) calc(var(--split) * 0.3);
-  }
-}
-
-/* 大部分時間是 none，只有末尾那幾個百分比會抽三下。
-   steps(1, end) 讓它是「跳格」而不是「滑過去」——跟 blink 用同一個理由。
-
-   ⚠️ 這些百分比是跟著週期一起改的，不是原本那組。keyframe 的百分比是「比例」，
-   週期從 6.5s 拉長到 11s 之後，原本的 91%–98% 會把那三下從 0.45 秒拖成 0.77 秒
-   ——那就不是抽一下，是慢慢晃，整個效果的重點就沒了。
-   現在的 95.5%–99.6% 在 11s 下是 0.45 秒，在 9.3s 下是 0.38 秒，跟拉長之前
-   一模一樣：抽動本身沒變，只是變得更少見。
-   所以「拉長」在這裡指的是兩次抽動之間的間隔，不是抽動本身。 */
-@keyframes chroma-jolt {
-  0%,
-  95.5% {
-    transform: none;
-  }
-  96.4% {
-    transform: translate(calc(var(--split) * 3), 0);
-  }
-  97.6% {
-    transform: translate(calc(var(--split) * -2), calc(var(--split) * -1));
-  }
-  98.8% {
-    transform: translate(calc(var(--split) * 1.5), 0);
-  }
-  99.6%,
-  100% {
-    transform: none;
-  }
-}
-
-/* 減少動態時只停掉位移的「變化」，不停掉效果本身：
-   色差是一張靜態的圖，不是動畫，拿掉它等於拿掉使用者沒有要求拿掉的東西。
-   基準的 translate 寫在規則裡而不是只寫在 keyframes 裡，就是為了這一刻。 */
-@media (prefers-reduced-motion: reduce) {
-  .chroma::before,
-  .chroma::after {
-    animation: none;
-  }
 }

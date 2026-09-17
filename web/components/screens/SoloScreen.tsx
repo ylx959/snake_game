@@ -15,7 +15,6 @@ import { Prompt } from "@/components/game/Prompt";
 import { ScoreBoard } from "@/components/game/ScoreBoard";
 import { StartPauseButton } from "@/components/game/StartPauseButton";
 import { LeaderboardTable } from "@/components/screens/LeaderboardTable";
-import { ChromaticText } from "@/components/ui/ChromaticText";
 import { Panel } from "@/components/ui/Panel";
 import type { BoardView } from "@/lib/renderer";
 import type { ClientMessage, ConnectionStatus, GameState, LeaderboardEntry } from "@/types/game";
@@ -47,9 +46,7 @@ export function SoloScreen({
 
       {over && (
         <Panel title="Game over" size="narrow" tone="ink">
-          <p className="bigscore">
-            <ChromaticText>{String(score).padStart(3, "0")}</ChromaticText>
-          </p>
+          <p className="bigscore">{String(score).padStart(3, "0")}</p>
           {/* A scoreless run is not written down, so say so - otherwise the
               player looks for a row that was never going to be there. */}
           {score === 0 && (
