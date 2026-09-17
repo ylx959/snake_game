@@ -218,7 +218,7 @@ Two places bend that rule, both deliberately:
 
   The mascot is sized at `--cell * 10.8` and the caption under it —
   `.home-below`, holding the lede, the three buttons and the note — is the
-  interface's usual `--cell` multiples written at 0.8, plus a top margin holding
+  interface's usual `--cell` multiples written at 0.9, plus a top margin holding
   it away from the head. Sizes, not `transform: scale`: scaling would blur the
   pixel font and shrink the buttons' hit areas along with their looks.
 
@@ -401,16 +401,41 @@ Rendering details that are load-bearing:
 - **A shared board draws its snakes exactly as solo does**: same hard square,
   same black eyes. Only the fill differs, and only because five snakes have to
   be told apart. A room is meant to look like the game, not like a different one.
-- **Snake cells are square, and drawn with `fillRect`.** They had a corner
-  radius for a while; `cellRectPath()` in `lib/board.ts` is what is left of that
-  seam, and it still has to exist: the canvas paints the snake and `LitText`
-  masks the white text with the same silhouette, so a difference of even one
-  rounded corner puts the lit text visibly off the snake. Squares also mean
-  nothing on the snake is antialiased — `bounds()` hands back whole-pixel edges
-  that neighbours share exactly, so segments tile seamlessly.
-  `docs/superpowers/` still holds the 2026-09-10 plan and spec for the rounded
-  version; those are a dated record of a decision since reversed, not a
-  description of the code.
+- **The body is square; only the two *ends* round** (`web/lib/snakeEnds.ts`).
+  A body cell is still `fillRect` on whole-pixel edges that neighbours share
+  exactly, so segments tile seamlessly and nothing along the run is antialiased.
+  The head rounds the two corners on its **leading edge** and the tail the two
+  on its **trailing edge** — never four. Four would pull each end away from its
+  own neck: the corners a cell shares with the segment behind it have to stay
+  hard, or a pinch of background shows through the join every tick. A one-cell
+  snake is its own head and tail and rounds all four, because it has no
+  neighbour to keep one square for.
+
+  Three things hold it together:
+
+  - **`END_RADIUS` is one number**, a fraction of the cell's shorter side, and
+    both consumers round it to whole pixels from the same cell size — so on a
+    small board it lands on 0 and the ends go square by themselves, which is
+    what you want, because a 2px radius on an 8px cell is a chewed corner rather
+    than a round one.
+  - **The mask is the same silhouette as the paint.** The canvas draws the
+    corners with `roundRect` and `LitText` masks the white readouts with
+    `cellRoundedPath()` from `lib/board.ts`, both off `endRadius` and the same
+    `cellEdges()` pixels. One pixel of disagreement hangs the lit text off the
+    nose. `cellRectPath()` is still the path a body cell takes, unchanged and
+    byte-for-byte what it always was.
+  - **The fog decides whether an end exists at all.** `applyFog` carries `tail`
+    and `beforeTail` measured on the *whole* snake and drops both when the tail
+    is culled, so an opponent cut off by the vision radius shows a square cut
+    rather than a nose where it does not end. The fog reports *where things
+    are*; `snakeEnds.ts` decides what that means for a corner — which is why
+    `lib/vision.ts` has no value import of it. That file is loaded straight into
+    `node --test`, which strips types but does not resolve the `@/` alias, so
+    every import in it must be type-only.
+
+  An earlier attempt rounded **every** cell at 8% and was reverted;
+  `docs/superpowers/` holds its 2026-09-10 plan and spec, which are a dated
+  record of that decision, not a description of the code.
 - **Two separate things: the cull decides what *exists*, the spotlight decides
   how *bright* it is.** `lib/vision.ts` holds both, but they never share a
   number. Mixing them is what made an opponent at the edge of vision get dimmed

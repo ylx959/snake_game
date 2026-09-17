@@ -12,11 +12,16 @@
  * Purely presentational. It reads the positions the server already sent and
  * asks the game nothing: no hit test, no geometry of its own. On a shared board
  * it clips against every snake at once, so any of them lights the text.
+ *
+ * The one hard rule: this mask and `Renderer`'s paint are the same silhouette,
+ * rounded ends included. Neither computes it - `lib/board.ts` and
+ * `lib/snakeEnds.ts` hold the shape, and both read it from there.
  */
 
 import { useEffect, useRef, useState, type ComponentPropsWithoutRef, type RefObject } from "react";
 
-import { cellEdges, cellRectPath } from "@/lib/board";
+import { cellEdges, cellRoundedPath } from "@/lib/board";
+import { endRadius } from "@/lib/snakeEnds";
 import { boardShape, litCells, type BoardView } from "@/lib/renderer";
 
 /** A zero-area path: clips the white copy away entirely. */
@@ -51,15 +56,21 @@ function useSnakeClip(ref: RefObject<HTMLElement | null>, view: BoardView | null
     const cellWidth = board.width / shape.cols;
     const cellHeight = board.height / shape.rows;
 
+    // The rounded ends of each snake are part of the silhouette, so the mask
+    // carries them too. Both sides take the radius from `endRadius` and the
+    // same whole-pixel cell size, so the mask and the paint round identically -
+    // a single pixel of disagreement shows as white text hanging off the nose.
     const path = litCells(view)
-      .map(([x, y]) => {
+      .map(({ cell: [x, y], corners }) => {
         const [left, width] = cellEdges(x, cellWidth);
         const [top, height] = cellEdges(y, cellHeight);
-        return cellRectPath(
+        return cellRoundedPath(
           board.left + left - box.left,
           board.top + top - box.top,
           width,
           height,
+          endRadius(width, height),
+          corners,
         );
       })
       .join("");

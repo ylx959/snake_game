@@ -36,6 +36,54 @@ export function cellRectPath(left: number, top: number, width: number, height: n
 }
 
 /**
+ * One cell as an SVG path with some of its corners rounded.
+ *
+ * The rounded ends of the snake - see `lib/snakeEnds.ts` - have to exist in the
+ * mask as well as in the paint, so `LitText` builds them from here and
+ * `Renderer` draws the same corners with `roundRect`. A radius of 0, or no
+ * rounded corner at all, falls straight back to `cellRectPath`: a body cell is
+ * a plain rectangle and stays byte-for-byte the path it always was, so
+ * neighbours go on sharing their edges exactly.
+ *
+ * Clockwise, starting at the top-left corner's end, because the whole snake is
+ * one concatenated `path()` filled with the nonzero rule - every subpath has to
+ * wind the same way or overlapping cells would cancel instead of union.
+ *
+ * The radius is never allowed past half the cell: two corners on one side
+ * asking for more than the side is long would make the arcs cross.
+ */
+export function cellRoundedPath(
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+  radius: number,
+  corners: readonly [boolean, boolean, boolean, boolean],
+): string {
+  const r = Math.min(radius, width / 2, height / 2);
+  if (r <= 0 || !corners.some(Boolean)) return cellRectPath(left, top, width, height);
+
+  const [tl, tr, br, bl] = corners.map((on) => (on ? r : 0));
+  const right = left + width;
+  const bottom = top + height;
+  // `A rx ry 0 0 1 x y` - a quarter circle, sweeping clockwise.
+  const arc = (x: number, y: number) => `A${r} ${r} 0 0 1 ${x} ${y}`;
+
+  return [
+    `M${left + tl} ${top}`,
+    `H${right - tr}`,
+    tr ? arc(right, top + tr) : "",
+    `V${bottom - br}`,
+    br ? arc(right - br, bottom) : "",
+    `H${left + bl}`,
+    bl ? arc(left, bottom - bl) : "",
+    `V${top + tl}`,
+    tl ? arc(left + tl, top) : "",
+    "Z",
+  ].join("");
+}
+
+/**
  * The largest board of the given shape that fits the window, centred.
  *
  * The cell size is floored to a whole pixel, which is what keeps every cell

@@ -526,15 +526,15 @@ body {
 /* The caption under the mascot: the lede, the three buttons and the note.
 
    One box rather than three siblings of the heading, because it is sized as one
-   thing. Every size in it is the interface's usual size times 0.8 - the same
-   `--cell` multiples written 0.8 smaller, not a `transform: scale`, which would
+   thing. Every size in it is the interface's usual size times 0.9 - the same
+   `--cell` multiples written 0.9 smaller, not a `transform: scale`, which would
    blur the pixel font and shrink the buttons' hit areas along with their looks.
    Button padding and the drop shadow are already in `em`, so they follow the
    font size down on their own.
 
-   The floors drop to 6px rather than scaling with the rest: 6px is where this
-   font stops being readable at all, and a floored size has already left the
-   proportion behind anyway.
+   The floors drop only as far as 6px, which is where this pixel font stops
+   being readable at all; a floored size has already left the proportion behind
+   anyway.
 
    `margin-top` holds it away from the head. The column is centred as a whole,
    so pushing this down moves the pair down the screen together, which is the
@@ -543,31 +543,31 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: calc(var(--cell) * 0.56); /* .screenful's 0.7, at 0.8 */
+  gap: calc(var(--cell) * 0.63); /* .screenful's 0.7, at 0.9 */
   margin-top: calc(var(--cell) * 1.4);
   width: 100%;
 }
 
 .home-below .lede {
-  font-size: max(6px, calc(var(--cell) * 0.304)); /* .lede's 0.38, at 0.8 */
+  font-size: max(7px, calc(var(--cell) * 0.342)); /* .lede's 0.38, at 0.9 */
 }
 
 .home-below .controls {
-  gap: calc(var(--cell) * 0.4); /* .controls' 0.5, at 0.8 */
+  gap: calc(var(--cell) * 0.45); /* .controls' 0.5, at 0.9 */
 }
 
 .home-below .controls--stack {
   /* The stack's own ceiling, at 0.8 too. Without this the buttons would keep
      their full width while their type shrank inside them. */
-  max-width: calc(var(--cell) * 9.6);
+  max-width: calc(var(--cell) * 10.8);
 }
 
 .home-below .controls button {
-  font-size: max(6px, calc(var(--cell) * 0.248)); /* the button's 0.31, at 0.8 */
+  font-size: max(7px, calc(var(--cell) * 0.279)); /* the button's 0.31, at 0.9 */
 }
 
 .home-below .field__note {
-  font-size: max(6px, calc(var(--cell) * 0.256)); /* .field__note's 0.32, at 0.8 */
+  font-size: max(6px, calc(var(--cell) * 0.288)); /* .field__note's 0.32, at 0.9 */
 }
 
 /* Out of the picture, still in the accessibility tree. `clip` rather than

@@ -9,6 +9,14 @@
  */
 
 import { cellEdges } from "@/lib/board";
+import {
+  SQUARE,
+  type Corners,
+  type SnakeEnds,
+  cornersOf,
+  endRadius,
+  ends,
+} from "@/lib/snakeEnds";
 import { INK, PAPER, paletteAt, playerColorAt } from "@/lib/palette";
 import {
   type FoggedBoard,
@@ -83,13 +91,33 @@ function channels(hex: string): string {
   return `${(packed >> 16) & 255}, ${(packed >> 8) & 255}, ${packed & 255}`;
 }
 
-/** The cells of every snake in a view, for the DOM text mask to clip against. */
-export function litCells(view: BoardView | null): Cell[] {
+/** One cell of the snake's silhouette: where it is, and which corners round. */
+export interface LitCell {
+  cell: Cell;
+  corners: Corners;
+}
+
+/** Every cell of a snake, each carrying the corners its position gives it. */
+function shape(cells: readonly Cell[], snake: SnakeEnds): LitCell[] {
+  return cells.map((cell) => ({ cell, corners: cornersOf(cell, snake) }));
+}
+
+/**
+ * The cells of every snake in a view, for the DOM text mask to clip against.
+ *
+ * Shaped, not bare: the mask has to be the *same silhouette* the canvas paints,
+ * rounded ends included, or the lit text sits visibly off the snake.
+ */
+export function litCells(view: BoardView | null): LitCell[] {
   if (!view) return [];
-  if (view.mode === "solo") return view.state.snake;
+  if (view.mode === "solo") {
+    return shape(view.state.snake, ends(view.state.snake, view.state.direction));
+  }
   // Only what is actually painted. An opponent the fog is hiding must not light
-  // the readouts either, or the text would say where they are.
-  return applyFog(view.state, view.you).snakes.flatMap((snake) => snake.cells);
+  // the readouts either, or the text would say where they are. A `FoggedSnake`
+  // already carries both ends and both headings, so it is a `SnakeEnds` as it
+  // stands.
+  return applyFog(view.state, view.you).snakes.flatMap((snake) => shape(snake.cells, snake));
 }
 
 /** The board's shape, in cells. */
@@ -238,8 +266,9 @@ export class Renderer {
   /** The snake and its eyes. The apple comes later, on top of the shadow. */
   private drawSolo(state: GameState): void {
     const { fg } = paletteAt(state.palette);
+    const snake = ends(state.snake, state.direction);
 
-    for (const cell of state.snake) this.fillCell(cell, fg);
+    for (const cell of state.snake) this.fillCell(cell, fg, cornersOf(cell, snake));
     if (state.snake.length > 0) this.drawEyes(state.snake[0], state.direction);
   }
 
@@ -264,7 +293,7 @@ export class Renderer {
   private drawGroup(board: FoggedBoard): void {
     for (const snake of board.snakes) {
       const color = playerColorAt(snake.color);
-      for (const cell of snake.cells) this.fillCell(cell, color);
+      for (const cell of snake.cells) this.fillCell(cell, color, cornersOf(cell, snake));
     }
 
     for (const snake of board.snakes) {
@@ -318,7 +347,7 @@ export class Renderer {
 
     ctx.restore();
 
-    this.fillCell(cell, fruit, FOOD_INSET);
+    this.fillCell(cell, fruit, SQUARE, FOOD_INSET);
   }
 
   /** Two black bars on the head, so you can tell which end is which. */
@@ -360,20 +389,43 @@ export class Renderer {
    * One cell, filled. A snake segment takes the whole cell (`inset` 0); the
    * apple is inset so it reads as an object rather than a wall tile.
    *
-   * `fillRect` with no rounding anywhere: the edges `bounds()` hands back are
-   * whole pixels and neighbours share them exactly, so segments tile with no
-   * seam and nothing on the snake is ever antialiased.
+   * `fillRect` unless a corner is asked for. The edges `bounds()` hands back
+   * are whole pixels and neighbours share them exactly, so a body cell tiles
+   * with no seam and nothing on it is ever antialiased. Only the two ends of a
+   * snake round - see `lib/snakeEnds.ts` - and only their outward corners, so
+   * every edge a segment shares with the next one is still a hard square.
+   *
+   * The radius comes off the *whole* cell rather than the inset one, so the
+   * canvas and `LitText`'s mask work from the same number. Nothing rounded is
+   * ever inset today, but the two would silently disagree if one ever were.
    *
    * Never translucent. Distance is the spotlight's job, laid over the finished
    * board; a cell drawn here is drawn at full strength.
    */
-  private fillCell(cell: Cell, color: string, inset = 0): void {
+  private fillCell(cell: Cell, color: string, corners: Corners = SQUARE, inset = 0): void {
+    const { ctx } = this;
     const [left, top, width, height] = this.bounds(cell);
     const padX = Math.round(width * inset);
     const padY = Math.round(height * inset);
+    const radius = endRadius(width, height);
 
-    this.ctx.fillStyle = color;
-    this.ctx.fillRect(left + padX, top + padY, width - padX * 2, height - padY * 2);
+    ctx.fillStyle = color;
+
+    if (radius <= 0 || !corners.some(Boolean)) {
+      ctx.fillRect(left + padX, top + padY, width - padX * 2, height - padY * 2);
+      return;
+    }
+
+    // `roundRect` takes the four radii in the same order `Corners` is written.
+    ctx.beginPath();
+    ctx.roundRect(
+      left + padX,
+      top + padY,
+      width - padX * 2,
+      height - padY * 2,
+      corners.map((on) => (on ? radius : 0)),
+    );
+    ctx.fill();
   }
 
   /**

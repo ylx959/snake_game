@@ -164,6 +164,39 @@ test("a dead opponent is off the board entirely", () => {
   assert.equal(themIn(fogged), undefined);
 });
 
+// --- the ends the rounded corners are drawn on ----------------------------
+
+test("a visible tail is reported with the cell in front of it", () => {
+  // Three cells of our own, so the tail has a neighbour to face away from.
+  const body = [HEAD, [9, 10], [8, 10]];
+  const fogged = applyFog(board([snake(ME, body)]), ME);
+  const me = fogged.snakes.find((s) => s.player_id === ME);
+
+  assert.deepEqual(me.tail, [8, 10]);
+  assert.deepEqual(me.beforeTail, [9, 10]);
+});
+
+test("a tail the fog has taken is absent, not the last cell that survived", () => {
+  // Head in view, tail further out and culled with it. Rounding whatever
+  // survived would put a nose on the cut the fog made.
+  const body = [[13, 10], [14, 10], [15, 10], [16, 10], [17, 10]];
+  const fogged = applyFog(board([snake(ME, [HEAD]), snake(THEM, body)]), ME);
+  const them = themIn(fogged);
+
+  assert.ok(them.cells.length > 0, "some of the opponent is still drawn");
+  assert.notDeepEqual(them.cells[them.cells.length - 1], [17, 10]);
+  assert.equal(them.tail, null);
+  assert.equal(them.beforeTail, null);
+});
+
+test("a one-cell snake has a tail and nothing in front of it", () => {
+  const fogged = applyFog(board([snake(ME, [HEAD])]), ME);
+  const me = fogged.snakes.find((s) => s.player_id === ME);
+
+  assert.deepEqual(me.tail, HEAD);
+  assert.equal(me.beforeTail, null);
+});
+
 // --- the falloff ----------------------------------------------------------
 
 /** The veil straight out along a row, one cell at a time from the head. */

@@ -71,6 +71,22 @@ export interface FoggedSnake {
   cells: Cell[];
   /** The head, when it is drawn. `null` means no eyes are drawn either. */
   head: Cell | null;
+  /**
+   * The tail, when it is drawn, and which way it points - both `null` when the
+   * fog has taken it.
+   *
+   * They are here rather than read off the end of `cells` because `cells` is
+   * what survived the cull: an opponent whose real tail is out of range still
+   * has a last *visible* cell, and rounding that one would draw a nose on a cut
+   * the fog made. Measured on the whole snake, then dropped if it is not drawn.
+   *
+   * `beforeTail` is the cell one in from the tail: `lib/snakeEnds.ts` turns the
+   * pair into which way the tail faces. This file says where things are and
+   * that one says what it means, the same way existence and brightness are
+   * split.
+   */
+  tail: Cell | null;
+  beforeTail: Cell | null;
 }
 
 export interface FoggedBoard {
@@ -184,6 +200,8 @@ export function applyFog(state: MultiplayerState, you: string | null): FoggedBoa
       .map((snake) => {
         const own = snake.player_id === you;
         const head = snake.cells[0];
+        const tail = snake.cells[snake.cells.length - 1];
+        const tailShown = tail !== undefined && drawn(tail, own);
 
         return {
           player_id: snake.player_id,
@@ -194,6 +212,12 @@ export function applyFog(state: MultiplayerState, you: string | null): FoggedBoa
           // The eyes are part of the head, so they follow it exactly: a head
           // outside the radius takes its eyes with it.
           head: head !== undefined && drawn(head, own) ? head : null,
+          // The rounded end goes the same way, and for the same reason. The
+          // cell in front of the tail comes with it so `lib/snakeEnds.ts` can
+          // work out which way the tail faces - both are read off the *whole*
+          // snake, before the cull, so the fog's own cut never gets a nose.
+          tail: tailShown ? tail : null,
+          beforeTail: tailShown ? (snake.cells[snake.cells.length - 2] ?? null) : null,
         };
       }),
   };
