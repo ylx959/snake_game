@@ -143,16 +143,27 @@ export function isCellVisibleFrom(cell: Cell, focus: Cell, radius: number): bool
  * Where the light comes from on a shared board: your own head, and only your
  * head. The rest of your snake is lit by it, never a light of its own.
  *
- * `null` means there is no spotlight at all, which covers three cases that all
- * want the same thing - a whole board. You are spectating (you are out, so
- * there is nothing left to hide from you, and a dark board would make watching
- * pointless), the connection has no snake in this room, or the room has not
- * said who we are yet.
+ * **Dying does not lift the light, it freezes it.** `frozen` is where your head
+ * was last seen, and it takes over the moment your snake is off the board - so
+ * the last thing a round shows you is the patch you died in, and the board you
+ * watch out and the board you win on are the same picture. It has to be passed
+ * in because a dead snake arrives with no cells at all: the server stops
+ * sending a body the moment it stops existing, so nothing in this state says
+ * where it was. `hooks/useGameSession.ts` remembers the cell; this file only
+ * says what it means.
+ *
+ * `null` is still the whole board, and it is now only the cases where there is
+ * nothing to centre on: the room has not said who we are yet, this connection
+ * has no snake in this room, or the player died before a single state arrived.
  */
-export function visionFocus(snakes: SnakeView[], you: string | null): Cell | null {
+export function visionFocus(
+  snakes: SnakeView[],
+  you: string | null,
+  frozen: Cell | null = null,
+): Cell | null {
   if (you === null) return null;
   const mine = snakes.find((snake) => snake.player_id === you);
-  if (!mine || !mine.alive || mine.cells.length === 0) return null;
+  if (!mine || !mine.alive || mine.cells.length === 0) return frozen;
   return mine.cells[0];
 }
 
@@ -178,9 +189,17 @@ export function soloFocus(state: GameState): Cell | null {
  * spotlight is laid over it afterwards like everything else, so the far end of
  * a long snake fades out with the ground it is lying on. It only means the fog
  * never *removes* your own cells the way it removes an opponent's.
+ *
+ * `frozen` is the cell a dead player's light stays on; it culls opponents from
+ * there exactly as a living head would, so being out does not hand you the
+ * board the players still in it cannot see.
  */
-export function applyFog(state: MultiplayerState, you: string | null): FoggedBoard {
-  const focus = visionFocus(state.snakes, you);
+export function applyFog(
+  state: MultiplayerState,
+  you: string | null,
+  frozen: Cell | null = null,
+): FoggedBoard {
+  const focus = visionFocus(state.snakes, you, frozen);
 
   const drawn = (cell: Cell, own: boolean): boolean =>
     own || focus === null || isCellVisibleFrom(cell, focus, ENEMY_VISIBILITY_RADIUS_CELLS);

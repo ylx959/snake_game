@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { MENU_COLORS, PAPER, PALETTES, PLAYER_COLORS } from "../lib/palette.ts";
+import { MENU_COLORS, PAPER, PALETTES, PLAYER_COLORS, ROOM_GROUND } from "../lib/palette.ts";
 
 /**
  * CIE Lab, so "are these two colours alike?" is asked the way an eye asks it.
@@ -62,11 +62,13 @@ test("the eye-distance helper agrees with the eye on a known near-miss", () => {
   assert.ok(difference("#000000", "#FFFFFF") > 90);
 });
 
-test("every player colour reads on the white board it is played on", () => {
+test("every player colour reads on the board it is played on", () => {
+  // Against `ROOM_GROUND`, not `PAPER`: the board is the light grey, and the
+  // five are chosen against the thing they actually lie on.
   let worst = { ratio: Infinity };
 
   for (const player of PLAYER_COLORS) {
-    const ratio = contrast(player, PAPER);
+    const ratio = contrast(player, ROOM_GROUND);
     if (ratio < worst.ratio) worst = { ratio, player };
   }
 

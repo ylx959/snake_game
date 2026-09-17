@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
+import { netLog } from "@/lib/netstats";
 import { Renderer, boardShape, type BoardView } from "@/lib/renderer";
 
 export function GameCanvas({ view }: { view: BoardView | null }) {
@@ -59,6 +60,11 @@ export function GameCanvas({ view }: { view: BoardView | null }) {
     }
 
     renderer.draw(view);
+    // The board's beat as the player actually sees it, for `window.__net()`.
+    // Here rather than at the socket: this is the last line before the pixels,
+    // so a frame that was received and then dropped on the floor is not
+    // counted as one that was shown.
+    netLog.paints.record(performance.now());
   }, []);
 
   useEffect(() => {

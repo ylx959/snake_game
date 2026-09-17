@@ -101,11 +101,12 @@ export function MenuScreen({
           <MenuCreature color={creatureColor} onShakeComplete={onCreatureShakeComplete} />
           {/* The only thing that says the mascot is a control. Hidden from the
               accessibility tree on purpose: the button beside it already says
-              what it does, and a loose "Tap me!" in the tree is an instruction
-              pointing at nothing. Outside the button for the same reason the
-              `h1` is - text inside a control joins its accessible name. */}
+              what it does, and a loose "Don’t tap me!" in the tree is an
+              instruction pointing at nothing. Outside the button for the same
+              reason the `h1` is - text inside a control joins its accessible
+              name. */}
           <p className="tap-me" aria-hidden="true">
-            Tap me!
+            Don’t tap me!
           </p>
         </div>
         {/* The caption, in one box so it sizes as one thing: 0.9 of the usual

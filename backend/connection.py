@@ -29,7 +29,7 @@ from game.command import Resize, Start
 from game.command import apply as apply_solo
 from game.game import Game, GameStatus
 from leaderboard.repository import LeaderboardRepository
-from room.clock import cancel_round, start_round
+from room.clock import cancel_round, next_beat, start_round
 from room.manager import RoomManager
 from room.nickname import clean_nickname
 from room.room import GameRoom, RoomError, RoomStatus
@@ -256,11 +256,19 @@ class Connection:
 
     async def _run_solo_clock(self) -> None:
         """The solo clock: unchanged in every respect that matters, except that
-        a finished run now writes its score."""
+        a finished run now writes its score.
+
+        It keeps an absolute beat for the same reason a room's does - see
+        `room.clock.next_beat`. One player is no less able to see an uneven
+        tick than five.
+        """
         game = self.solo
         assert game is not None
+        loop = asyncio.get_running_loop()
+        deadline = loop.time()
         while True:
-            await asyncio.sleep(game.tick_seconds)
+            deadline = next_beat(deadline, loop.time(), game.tick_seconds)
+            await asyncio.sleep(max(0.0, deadline - loop.time()))
             before = game.status
             game.tick()
             self.session.send(game.to_dict())

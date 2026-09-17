@@ -9,6 +9,7 @@ import pytest
 
 from game.multiplayer import MultiStatus
 from game.snake import Direction
+from room.clock import next_beat
 from room.codes import CODE_ALPHABET, CODE_LENGTH, generate_code, normalise_code
 from room.manager import RoomManager
 from room.nickname import MAX_NICKNAME, MIN_NICKNAME, clean_nickname
@@ -408,3 +409,39 @@ def test_a_player_is_found_by_id_and_never_by_nickname():
     room, sessions = room_with(2)
     assert room.players[sessions[0].player_id] is sessions[0]
     assert sessions[0].nickname not in room.players
+
+
+# --- the beat -------------------------------------------------------------
+
+
+def test_the_beat_is_absolute_and_does_not_drift():
+    # Each tick takes 30ms of real work. Sleeping a whole interval afterwards
+    # would put the clock 30ms further behind on every single tick; counting
+    # from a deadline, the work is simply absorbed.
+    interval, work = 0.12, 0.03
+    deadline, now = 0.0, 0.0
+
+    for beat in range(1, 51):
+        deadline = next_beat(deadline, now, interval)
+        now = deadline + work  # woke on time, then did the tick
+        assert deadline == pytest.approx(beat * interval)
+
+
+def test_a_beat_missed_by_more_than_a_tick_is_not_made_up():
+    # The process was held up for a second. The backlog is dropped rather than
+    # fired off back to back, which would run the game at several cells a tick.
+    interval = 0.12
+    deadline = next_beat(0.0, 0.0, interval)
+    assert deadline == pytest.approx(interval)
+
+    late = deadline + 1.0
+    assert next_beat(deadline, late, interval) == pytest.approx(late + interval)
+
+
+def test_a_tick_that_ran_long_only_eats_into_its_own_slack():
+    # Late, but by less than a whole interval: the schedule is kept, so the
+    # next tick comes early rather than the clock slipping for good.
+    interval = 0.12
+    deadline = next_beat(0.0, 0.0, interval)
+    slightly_late = deadline + interval * 0.5
+    assert next_beat(deadline, slightly_late, interval) == pytest.approx(2 * interval)

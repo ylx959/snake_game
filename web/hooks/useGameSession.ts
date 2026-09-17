@@ -19,9 +19,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { bindKeyboard } from "@/lib/input";
+import { exposeNetProbe, netLog } from "@/lib/netstats";
+import { Playout } from "@/lib/playout";
 import type { BoardView } from "@/lib/renderer";
 import { GameSocket } from "@/lib/websocket";
 import type {
+  Cell,
   ClientMessage,
   ConnectionStatus,
   GameState,
@@ -59,6 +62,13 @@ export interface SessionState {
   rankings: Ranking[] | null;
   leaderboard: LeaderboardEntry[] | null;
   lastScore: number | null;
+  /**
+   * The cell your own head was last seen on in this round, kept so that dying
+   * freezes the spotlight there rather than lifting it (`lib/vision.ts`). A
+   * dead snake arrives with no cells, so if this is not remembered as the
+   * round runs there is nothing left to centre the light on afterwards.
+   */
+  lastHead: Cell | null;
   error: string | null;
 }
 
@@ -75,6 +85,7 @@ const EMPTY: SessionState = {
   rankings: null,
   leaderboard: null,
   lastScore: null,
+  lastHead: null,
   error: null,
 };
 
@@ -142,10 +153,26 @@ function reduce(state: SessionState, message: ServerMessage): SessionState {
         countdown: message.seconds,
         group: null,
         rankings: null,
+        // With the board. A new round starts in the dark from its own head,
+        // never from where the last one ended.
+        lastHead: null,
       };
 
-    case "game_state":
-      return { ...state, phase: "playing", group: message, countdown: null };
+    case "game_state": {
+      // The last cell your head stood on, kept for `lib/vision.ts`. Only while
+      // you are alive: the tick that kills you sends an empty snake, and that
+      // is exactly the moment the remembered cell has to survive.
+      const mine = message.snakes.find((snake) => snake.player_id === state.you);
+      const head = mine?.alive ? (mine.cells[0] ?? null) : null;
+
+      return {
+        ...state,
+        phase: "playing",
+        group: message,
+        countdown: null,
+        lastHead: head ?? state.lastHead,
+      };
+    }
 
     case "results":
       return { ...state, phase: "results", rankings: message.rankings };
@@ -170,10 +197,33 @@ function reduce(state: SessionState, message: ServerMessage): SessionState {
 export function useGameSession(url: string = DEFAULT_URL) {
   const [state, setState] = useState<SessionState>(EMPTY);
   const socketRef = useRef<GameSocket | null>(null);
+  /**
+   * Board frames wait here for their turn on an even beat; everything else
+   * goes straight through. See `lib/playout.ts` - the server's clock is the
+   * one that decides what happens, this only decides when it is seen.
+   */
+  const playoutRef = useRef(new Playout<ServerMessage>());
 
   useEffect(() => {
+    const apply = (message: ServerMessage) => setState((current) => reduce(current, message));
+    const playout = playoutRef.current;
+
     const socket = new GameSocket(url, {
-      onMessage: (message) => setState((current) => reduce(current, message)),
+      onMessage: (message) => {
+        if (message.type === "state" || message.type === "game_state") {
+          netLog.arrivals.record(performance.now());
+          playout.push(message, performance.now());
+          return;
+        }
+
+        // Anything else empties the queue ahead of itself, so the screen sees
+        // messages in the order the socket delivered them: a `results` can
+        // never overtake the last tick of its own round, and a `lobby_state`
+        // for a room we just left can never be undone by a frame still in the
+        // queue putting the board back.
+        for (const queued of playout.flush()) apply(queued);
+        apply(message);
+      },
       onStatusChange: (connection) =>
         setState((current) => ({
           ...current,
@@ -186,7 +236,25 @@ export function useGameSession(url: string = DEFAULT_URL) {
     socketRef.current = socket;
     socket.connect();
 
+    // The board's own clock. It runs whatever is on screen - a menu costs one
+    // `due()` call a frame, which finds an empty queue and returns.
+    let frame = requestAnimationFrame(function step() {
+      frame = requestAnimationFrame(step);
+      for (const message of playout.due(performance.now())) apply(message);
+    });
+
+    const hideProbe = exposeNetProbe(() => ({
+      depth: playout.depth,
+      period: playout.period,
+    }));
+
     return () => {
+      cancelAnimationFrame(frame);
+      hideProbe();
+      // A new socket is a new beat, and a fresh measurement of it.
+      playout.reset();
+      netLog.arrivals.reset();
+      netLog.paints.reset();
       socket.disconnect();
       socketRef.current = null;
     };
@@ -215,10 +283,10 @@ export function useGameSession(url: string = DEFAULT_URL) {
     if (state.group && (state.phase === "playing" || state.phase === "results")) {
       // `you` rides along because a shared board is drawn differently for each
       // player: the fog in `lib/vision.ts` is measured from your own head.
-      return { mode: "group", state: state.group, you: state.you };
+      return { mode: "group", state: state.group, you: state.you, lastHead: state.lastHead };
     }
     return null;
-  }, [state.phase, state.solo, state.group, state.you]);
+  }, [state.phase, state.solo, state.group, state.you, state.lastHead]);
 
   /** Your own snake on a shared board, or null in solo and in the menus. */
   const me = useMemo(

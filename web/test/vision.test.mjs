@@ -148,7 +148,26 @@ test("apples are never culled, however far away they are", () => {
   assert.equal(isCellVisibleFrom(far, HEAD, ENEMY_VISIBILITY_RADIUS_CELLS), false);
 });
 
-test("a spectator gets the whole board back", () => {
+test("dying freezes the light where the head was, it does not lift it", () => {
+  const dead = snake(ME, [], false);
+  const near = snake(THEM, [[11, 10], [12, 10]]);
+
+  // The remembered cell takes over the moment the snake stops existing.
+  assert.deepEqual(visionFocus([dead, near], ME, HEAD), HEAD);
+
+  // And it culls from there exactly as a living head would: being out must not
+  // hand you the board the players still in it cannot see.
+  const far = snake(THEM, [[40, 30], [41, 30]]);
+  const fogged = applyFog(board([dead, far]), ME, HEAD);
+  assert.deepEqual(themIn(fogged).cells, []);
+  assert.equal(themIn(fogged).head, null);
+
+  assert.deepEqual(applyFog(board([dead, near]), ME, HEAD).snakes[0].cells, [[11, 10], [12, 10]]);
+});
+
+test("with nothing to centre on, the whole board comes back", () => {
+  // No remembered cell - nobody has played a tick yet, or we are not in this
+  // room at all. There is no light, so nothing is culled either.
   const dead = snake(ME, [], false);
   const them = snake(THEM, [[40, 30], [41, 30]]);
 

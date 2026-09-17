@@ -24,7 +24,7 @@ import { SoloScreen } from "@/components/screens/SoloScreen";
 import { useBoardRect } from "@/hooks/useBoardRect";
 import { useGameSession } from "@/hooks/useGameSession";
 import { useMenuPop } from "@/hooks/useMenuPop";
-import { PAPER, paletteAt } from "@/lib/palette";
+import { ROOM_GROUND, paletteAt } from "@/lib/palette";
 import { boardShape } from "@/lib/renderer";
 
 /** The solo board, and the shape of the page before the server has spoken. */
@@ -92,7 +92,7 @@ export default function Home() {
         palette
           ? ({ "--bg": palette.bg, "--fg": palette.fg } as React.CSSProperties)
           : view?.mode === "group"
-            ? ({ "--bg": PAPER, "--emboss": "transparent" } as React.CSSProperties)
+            ? ({ "--bg": ROOM_GROUND, "--emboss": "transparent" } as React.CSSProperties)
             : theme === "pop"
               ? ({ "--bg": menu.color.bg } as React.CSSProperties)
               : undefined

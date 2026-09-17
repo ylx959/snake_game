@@ -28,7 +28,10 @@ export function ResultsScreen({
 
   return (
     <Panel
-      title={mine?.place === 1 ? "You win" : "Round over"}
+      // What it says to *you*, because the table below already says what
+      // happened to everybody. `mine` is missing only for somebody who was not
+      // in the round at all, and neither word is true for them.
+      title={mine ? (mine.place === 1 ? "You win" : "You lose") : "Round over"}
       size="wide"
       footer={
         <>

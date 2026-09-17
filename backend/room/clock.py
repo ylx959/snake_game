@@ -7,6 +7,10 @@ which is what makes every rule in there testable without an event loop.
 The single task is the fairness guarantee made concrete: there is exactly one
 place in the process that can advance a room's game, so two players cannot be
 on different ticks, and a player sending more messages cannot buy more of them.
+
+The beat is kept against an absolute schedule, not by sleeping for a tick after
+each one. `next_beat` is why, and the solo clock in `connection.py` uses it for
+the same reason.
 """
 
 from __future__ import annotations
@@ -19,6 +23,28 @@ from protocol import countdown
 from .room import GameRoom, RoomStatus
 
 
+def next_beat(previous: float, now: float, interval: float) -> float:
+    """When the next tick is due, on an absolute schedule.
+
+    Sleeping for `interval` *after* doing the work is the obvious loop and the
+    wrong one: the real period becomes `interval` plus however long the tick and
+    the broadcast took, plus whatever the event loop was busy with. None of
+    those is constant, so the clock does not merely run slow - it runs
+    *unevenly*, and that lands on every player's screen as a snake that hurries
+    and hesitates. Counting from a deadline instead means the work has to take
+    longer than a whole tick before it can move the next one at all.
+
+    A beat missed by more than a whole interval is not made up. The process was
+    suspended, or the machine was oversubscribed; firing the backlog would run
+    the game at several cells a tick to catch up, which is worse for everybody
+    than a clock that simply carries on from here.
+    """
+    target = previous + interval
+    if now - target > interval:
+        return now + interval
+    return target
+
+
 async def run_round(room: GameRoom) -> None:
     """Count down, tick until somebody has won, then post the results."""
     try:
@@ -29,8 +55,12 @@ async def run_round(room: GameRoom) -> None:
         room.begin_play()
         _broadcast_state(room)
 
+        loop = asyncio.get_running_loop()
+        deadline = loop.time()
+
         while room.status is RoomStatus.RUNNING and room.game is not None:
-            await asyncio.sleep(room.game.tick_seconds)
+            deadline = next_beat(deadline, loop.time(), room.game.tick_seconds)
+            await asyncio.sleep(max(0.0, deadline - loop.time()))
             room.tick()
             _broadcast_state(room)
 

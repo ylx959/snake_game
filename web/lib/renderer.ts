@@ -17,7 +17,7 @@ import {
   endRadius,
   ends,
 } from "@/lib/snakeEnds";
-import { INK, PAPER, paletteAt, playerColorAt } from "@/lib/palette";
+import { INK, PAPER, ROOM_GROUND, paletteAt, playerColorAt } from "@/lib/palette";
 import {
   type FoggedBoard,
   applyFog,
@@ -39,7 +39,17 @@ import type { Cell, Direction, GameState, MultiplayerState } from "@/types/game"
  */
 export type BoardView =
   | { mode: "solo"; state: GameState }
-  | { mode: "group"; state: MultiplayerState; you: string | null };
+  | {
+      mode: "group";
+      state: MultiplayerState;
+      you: string | null;
+      /**
+       * Where your own head was last seen. It is what the spotlight stands on
+       * once your snake is gone, so losing freezes the light instead of
+       * lifting it - see `visionFocus`.
+       */
+      lastHead: Cell | null;
+    };
 
 /**
  * The head's eyes: two fully rounded bars that run along the way the snake is
@@ -85,6 +95,24 @@ const HALO_RADIUS_CELLS = 0.75;
 const HALO_ALPHA = 0.8;
 const HALO_STEPS = 8;
 
+/**
+ * The drop shadow a shared board's snakes cast: how far it is offset, as a
+ * fraction of the cell, and what it is painted in.
+ *
+ * A room's ground is white and never moves, so five flat colours lie flat on
+ * it; one offset silhouette underneath is what lifts them off it. Down and
+ * right by the same amount, because that is the direction every other shadow in
+ * this interface falls (`--emboss` is `0.06em 0.06em`), and translucent black
+ * rather than a darker shade of each snake, because a shadow is the light the
+ * body is keeping off the board and not a property of the body.
+ *
+ * **Solo has none.** Its ground cycles through the palettes, several of them
+ * dark, where a black offset is either invisible or a smear - and a solo board
+ * has one snake, which needs nothing to tell it apart from four others.
+ */
+const SHADOW_OFFSET_CELLS = 0.16;
+const SHADOW_COLOR = "rgba(0, 0, 0, 0.2)";
+
 /** `#00D6F0` -> `0, 214, 240`, so a gradient can vary that colour's alpha. */
 function channels(hex: string): string {
   const packed = Number.parseInt(hex.slice(1), 16);
@@ -116,7 +144,9 @@ export function litCells(view: BoardView | null): LitCell[] {
   // the readouts either, or the text would say where they are. A `FoggedSnake`
   // already carries both ends and both headings, so it is a `SnakeEnds` as it
   // stands.
-  return applyFog(view.state, view.you).snakes.flatMap((snake) => shape(snake.cells, snake));
+  return applyFog(view.state, view.you, view.lastHead).snakes.flatMap((snake) =>
+    shape(snake.cells, snake),
+  );
 }
 
 /** The board's shape, in cells. */
@@ -183,11 +213,11 @@ export class Renderer {
     const { state } = view;
 
     // Solo cycles a background on a server-sent index, one step per apple. A
-    // room does not cycle at all: it is white, and stays white. The five player
-    // colours cannot move out of a background's way - a colour is which player
-    // you are - so the ground is the thing that holds still, and `PLAYER_COLORS`
-    // is chosen against it.
-    const ground = view.mode === "solo" ? paletteAt(view.state.palette).bg : PAPER;
+    // room does not cycle at all: it is `ROOM_GROUND`, the light grey, and it
+    // stays that. The five player colours cannot move out of a background's
+    // way - a colour is which player you are - so the ground is the thing that
+    // holds still, and `PLAYER_COLORS` is chosen against it.
+    const ground = view.mode === "solo" ? paletteAt(view.state.palette).bg : ROOM_GROUND;
     ctx.fillStyle = ground;
     ctx.fillRect(0, 0, state.width * this.cellWidth, state.height * this.cellHeight);
 
@@ -209,10 +239,15 @@ export class Renderer {
       // Black, on every palette, exactly as it always has been.
       if (view.state.food) this.drawFood(view.state.food, ground, INK);
     } else {
-      const board = applyFog(view.state, view.you);
+      const board = applyFog(view.state, view.you, view.lastHead);
+      this.drawShadow(board);
       this.drawGroup(board);
-      this.drawVeil(state.width, state.height, visionFocus(view.state.snakes, view.you));
-      // Black, like solo's: the ground is white here, and black reads on it.
+      this.drawVeil(
+        state.width,
+        state.height,
+        visionFocus(view.state.snakes, view.you, view.lastHead),
+      );
+      // Black, like solo's: the ground is pale here, and black reads on it.
       for (const cell of board.food) this.drawFood(cell, ground, INK);
     }
   }
@@ -289,6 +324,61 @@ export class Renderer {
    * Bodies first, then the eyes, so a head another snake is drawn over still
    * shows which way it was looking.
    */
+  /**
+   * Every snake's silhouette a second time, offset down-right and translucent,
+   * under the whole roster.
+   *
+   * **One path, one fill.** Subpaths that overlap - two snakes' shadows
+   * crossing - fill once under the nonzero rule, so the translucent black never
+   * doubles into a darker patch where they meet. It is the same thing that
+   * keeps the cells of a single snake seamless: a shared edge is interior to
+   * the path rather than the meeting of two separate fills.
+   *
+   * Every shadow before any body, never one snake at a time, or the snake drawn
+   * first would have the next one's shadow lying across it.
+   *
+   * The offset is whole pixels off the same cell size everything else is
+   * measured from, so the shadow tiles on the grid like the body does. It lands
+   * on 0 on a small board and is dropped rather than drawn directly under the
+   * snake - the same way `endRadius` goes square when there is no room for a
+   * corner.
+   *
+   * It reads the fogged board, so an opponent who is not drawn casts nothing:
+   * a shadow with no snake over it would say exactly what the fog is hiding.
+   */
+  private drawShadow(board: FoggedBoard): void {
+    const { ctx } = this;
+    const offset = Math.round(Math.min(this.cellWidth, this.cellHeight) * SHADOW_OFFSET_CELLS);
+    if (offset <= 0) return;
+
+    ctx.save();
+    ctx.fillStyle = SHADOW_COLOR;
+    ctx.beginPath();
+
+    for (const snake of board.snakes) {
+      for (const cell of snake.cells) {
+        const [left, top, width, height] = this.bounds(cell);
+        const corners = cornersOf(cell, snake);
+        const radius = endRadius(width, height);
+
+        if (radius <= 0 || !corners.some(Boolean)) {
+          ctx.rect(left + offset, top + offset, width, height);
+        } else {
+          ctx.roundRect(
+            left + offset,
+            top + offset,
+            width,
+            height,
+            corners.map((on) => (on ? radius : 0)),
+          );
+        }
+      }
+    }
+
+    ctx.fill();
+    ctx.restore();
+  }
+
   private drawGroup(board: FoggedBoard): void {
     for (const snake of board.snakes) {
       const color = playerColorAt(snake.color);

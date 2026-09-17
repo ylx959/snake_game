@@ -82,6 +82,25 @@ export function playerColorAt(index: number): string {
 export const PAPER = "#FFFFFF";
 
 /**
+ * The ground a **room** is played on, and the one thing on that board that
+ * never moves: it does not cycle, it is not sent by the server, and the five
+ * player colours are chosen against it.
+ *
+ * A light grey rather than `PAPER`. Paper white is the same colour as the page
+ * around it and as every card on top of it, so the board had no edge of its own
+ * and the snakes' drop shadow - the one thing telling five flat colours they
+ * are sitting *on* something - had nothing to be a shadow on. Grey gives the
+ * shadow a ground to darken and the board a body.
+ *
+ * It stays close to white on purpose. Everything on this board is dark - the
+ * apple and the frame are black, and the five snakes are picked for luminance
+ * against a pale ground - so the further this moves toward the middle the less
+ * any of them reads. `test/palette.test.mjs` measures the five against *this*
+ * constant, not against white.
+ */
+export const ROOM_GROUND = "#EEEEEE";
+
+/**
  * The flat colours the **menu** cycles through, and which way round the type
  * goes on each.
  *

@@ -111,13 +111,13 @@ Two places bend that rule, both deliberately:
   `__init__` and nowhere else — so restarting a run keeps the colours and only a
   new connection starts from pair 0.
 
-  **Solo only.** A room is white and stays white, and `MultiplayerGame` has no
-  `palette` at all — not on the object and not on the wire. It did for a while,
-  cycling one step per death; that is gone rather than merely unused, so there
-  is no field left for the two sides of the contract to disagree about.
+  **Solo only.** A room is one light grey and stays that, and `MultiplayerGame`
+  has no `palette` at all — not on the object and not on the wire. It did for a
+  while, cycling one step per death; that is gone rather than merely unused, so
+  there is no field left for the two sides of the contract to disagree about.
 
   A solo screen wears its pair. A room takes the stylesheet's default — black
-  type on the white board — and the remaining text-only screens (loading, a
+  type on the pale board — and the remaining text-only screens (loading, a
   lobby, the countdown, a result) take `data-theme="dark"`, which inverts the
   same five tokens rather than restating any rule. A room board also sets
   `--emboss` inline: it follows `--fg`, which at the root is still solo's first
@@ -319,17 +319,17 @@ Two places bend that rule, both deliberately:
   heading folds its own label into the heading's accessible name. The loading
   screen, whose creature is not a control, still puts it in the `h1`.
 
-  **`TAP ME!` under the mascot is a caption, not the heading coming back.**
-  Nothing else on the screen says the picture is a control, and a mascot that
-  only reacts to a press nobody makes is a mascot that does nothing. It is a
-  `<p class="tap-me">` and it is `aria-hidden`: the button beside it is already
-  named, and a loose "Tap me!" in the accessibility tree is an instruction
-  pointing at nothing. It sits outside the button for the same reason the `h1`
-  does — text inside a control joins that control's accessible name. It
-  declares no colour, so like the lede and the note it inherits the pop pair's
-  measured `--ink` and turns white on `#4B2BEE` with them. And it holds
-  perfectly still: no blink, no pulse, no slide. The creature is still the only
-  thing on this screen that moves.
+  **`Don’t tap me!` under the mascot is a caption, not the heading coming
+  back.** Nothing else on the screen says the picture is a control, and a mascot
+  that only reacts to a press nobody makes is a mascot that does nothing. It is
+  a `<p class="tap-me">` and it is `aria-hidden`: the button beside it is
+  already named, and a loose "Don’t tap me!" in the accessibility tree is an
+  instruction pointing at nothing. It sits outside the button for the same
+  reason the `h1` does — text inside a control joins that control's accessible
+  name. It declares no colour, so like the lede and the note it inherits the
+  pop pair's measured `--ink` and turns white on `#4B2BEE` with them. And it
+  holds perfectly still: no blink, no pulse, no slide. The creature is still the
+  only thing on this screen that moves.
 
   The mascot is sized at `--cell * 10.8` and the caption under it —
   `.home-below`, holding the lede, the three buttons and the note — is the
@@ -378,6 +378,16 @@ leaderboard/    the only thing that outlives the process
   thing in the process that can advance that room's game, which is what makes
   "everybody is on the same tick" true by construction rather than by agreement.
   A round's task is created on start and gone when the round ends.
+- **Both clocks keep an absolute beat** — `next_beat` in `room/clock.py`, used
+  by the room's round and by the solo clock in `connection.py`. Sleeping for a
+  tick *after* doing the work makes the real period "a tick plus however long
+  the tick, the broadcast and the event loop took", which does not merely run
+  slow, it runs **unevenly** — and uneven is what a player sees, as a snake that
+  hurries and hesitates. Counting from a deadline means the work has to overrun
+  a whole tick before it can move the next one. A beat missed by more than one
+  interval is dropped rather than made up: firing the backlog would run the game
+  at several cells a tick to catch up, which is worse than carrying on from
+  here.
 - **Cleanup is idempotent everywhere.** A socket can report its own death more
   than once — a close frame, the receive loop unwinding, then `finally` — so
   `Connection.close()`, `GameRoom.remove()` and `clock.cancel_round()` all
@@ -444,9 +454,9 @@ wherever the first two entries happen to be.
 Layered so that only one file knows about both React and the socket:
 
 - `lib/` (`websocket.ts`, `input.ts`, `renderer.ts`, `palette.ts`, `board.ts`,
-  `nickname.ts`) imports no React. `Renderer` is stateless with respect to the
-  game — it draws exactly the `BoardView` it is handed, so it cannot disagree
-  with the server.
+  `nickname.ts`, `playout.ts`, `netstats.ts`) imports no React. `Renderer` is
+  stateless with respect to the game — it draws exactly the `BoardView` it is
+  handed, so it cannot disagree with the server.
 - `hooks/useGameSession.ts` is the only React↔socket seam: socket lifecycle,
   keyboard binding, and a reducer turning each server message into screen state.
   `phase` is the one thing the browser owns, and only because it is about which
@@ -455,6 +465,47 @@ Layered so that only one file knows about both React and the socket:
 - `components/game/` is the board and the readouts over it; `components/screens/`
   is everything else; `components/ui/` is the panel and the two input fields.
   All presentational.
+
+**The board is not drawn when a frame arrives; it is drawn on a beat**
+(`web/lib/playout.ts`). `useGameSession` puts every `state` / `game_state` into
+a playout buffer and an animation-frame loop lets them out one per measured
+period, so the *network's* jitter stops being the board's timing. That was the
+whole of it before: `GameCanvas` repainted on the message, so 90ms then 150ms
+between frames was 90ms then 150ms of movement. A steady round trip is
+something a player stops noticing; an unsteady one never becomes invisible.
+Five things about it:
+
+- **Nothing is interpolated.** A snake still stands on the grid, on whole
+  pixels, and `Renderer` did not change at all. Only *when* a frame is shown is
+  decided here — sub-cell sliding would be a different-looking game and would
+  take `fitBoard()`'s whole-pixel rule with it.
+- **The schedule is absolute and survives an empty queue.** In a healthy round
+  the queue empties on every single frame, so re-arming the beat whenever it
+  ran dry would hand the jitter straight back. A frame late by less than a
+  period keeps the grid; later than that is a stall, and the beat re-anchors
+  and rebuilds its cushion.
+- **The period is the *mean* of recent arrival gaps, not the median.** Jitter
+  puts an arrival early or late, so it lands in two consecutive gaps with
+  opposite signs and cancels in a sum; the middle of a spread that wide is
+  wherever a handful of samples fell, and 30ms out is enough to make the board
+  outrun the server or fall behind it.
+- **`BUFFER_MS` is 80 and it is a real cost** — it is added to the time between
+  a key press and the turn you see. Two thirds of a tick buys the smoothing for
+  less than one tick of delay.
+- **A message that is not a board frame flushes the queue ahead of itself**, so
+  the screen sees things in the order the socket delivered them: a `results`
+  cannot overtake the last tick of its own round, and a `lobby_state` for a
+  room we just left cannot be undone by a frame still queued. A hidden tab gets
+  no animation frames at all, so the queue is capped (`MAX_QUEUE`) and trimmed
+  to the newest frame — every frame is a complete board, so the last one is the
+  whole truth and the rest are where the snake used to be.
+
+`lib/netstats.ts` is how any of that is known: it logs the gaps between
+arrivals and between paints, and `window.__net()` prints both distributions
+plus the buffer's depth and measured period. Ragged arrivals with flat paints is
+the buffer working. It is a console tool on purpose — a readout on the board
+would be one more thing repainting eight times a second, and this is for
+comparing a deploy against the one before it, not for a player to read.
 
 **The stage is the game.** `.stage` is a 16:9 box, as large as the window
 allows, centred; the window outside it is `--ink`, so a window of any shape
@@ -495,27 +546,66 @@ Rendering details that are load-bearing:
   store still held the old picture. `Renderer.clear()` resets the transform
   before clearing: `draw` leaves a device-pixel-ratio scale on the context, and
   clearing through it would wipe only the top-left corner on a retina display.
-- **A room board is white, and `PLAYER_COLORS` is chosen against it.** The five
+- **A room board is a light grey — `ROOM_GROUND`, `#EEEEEE`, in
+  `web/lib/palette.ts` — and `PLAYER_COLORS` is chosen against it.** The five
   were originally picked for a black board, where luminance is what makes a
-  colour visible; on white that same property erases three of them — `#FFE93D`
-  lands at 1.24:1 and `#3EE03E` at 1.76:1, which is not a hard-to-read snake but
-  an invisible one. They are now the same five hues *darkened*, each carrying at
-  least 4.5:1 against the ground and at least ΔE 40 from each other, both
-  measured in `test/palette.test.mjs` rather than trusted.
+  colour visible; on a pale ground that same property erases three of them —
+  `#FFE93D` lands at 1.24:1 against white and `#3EE03E` at 1.76:1, which is not
+  a hard-to-read snake but an invisible one. The rule is the same five hues
+  *darkened*, each carrying at least 4.5:1 against the ground and at least ΔE 40
+  from each other, both measured in `test/palette.test.mjs` — against
+  `ROOM_GROUND` rather than against `PAPER`, because the board is what a snake
+  actually lies on.
 
-  The board reached white the long way, and the wrong turns are worth knowing.
-  It was black; then it cycled the solo palette on every death, which put
-  `#FFE93D` under the player already wearing `#FFE93D` — the same colour, ΔE 0;
-  then it cycled a room-specific list built to avoid exactly that, which was too
-  dark for the spotlight to show on. A fixed white ground ends the whole class of
-  problem: there is one background, it never moves, and five colours can be
-  chosen against it once.
+  The board reached its pale ground the long way, and the wrong turns are worth
+  knowing. It was black; then it cycled the solo palette on every death, which
+  put `#FFE93D` under the player already wearing `#FFE93D` — the same colour,
+  ΔE 0; then it cycled a room-specific list built to avoid exactly that, which
+  was too dark for the spotlight to show on. One fixed pale ground ends the
+  whole class of problem: there is one background, it never moves, and five
+  colours can be chosen against it once.
+
+  **Grey and not `PAPER`, though it was white first.** The page around the
+  stage, the cards on top of it and the board were all one white, so the board
+  had no body of its own — and the drop shadow below has nothing to be a shadow
+  *on* against a ground the same colour as everything else. It stays close to
+  white on purpose: everything on this board is dark — a black apple, a black
+  frame, five snakes picked for luminance — so every step toward the middle
+  costs all of them at once. `--bg` on a room screen is the same constant
+  (`app/page.tsx`), so the DOM and the canvas cannot drift apart.
 
   The apple is black on it, like solo's.
 
+- **The snakes on a shared board cast one drop shadow**
+  (`Renderer.drawShadow`). Five flat colours on one flat ground read as a
+  diagram; an offset silhouette underneath makes them objects lying on a board.
+  Down and right, like every other shadow in the interface (`--emboss` is
+  `0.06em 0.06em`), translucent black rather than a darker shade of each snake —
+  a shadow is the light a body keeps off the ground, not a property of the body.
+  Four things about it:
+
+  - **Solo has none.** Its ground cycles through eight palettes, several of them
+    dark, where a black offset is either invisible or a smear — and one snake
+    needs nothing to tell it apart from four others.
+  - **One path, one fill.** Every cell of every snake is added to a single path
+    and filled once, so two snakes' shadows crossing union under the nonzero
+    rule instead of laying translucent black twice and drawing a darker patch
+    where they meet. It is also what keeps a single snake seamless: a shared
+    edge is interior to the path rather than the meeting of two fills.
+  - **Every shadow before any body, never one snake at a time**, or the snake
+    drawn first would wear the next one's shadow.
+  - **The offset is whole pixels off the same cell size everything else is
+    measured from**, so the shadow tiles on the grid like the body does; it
+    lands on 0 on a small board and is dropped rather than drawn directly under
+    the snake, exactly as `endRadius` goes square when there is no room for a
+    corner. It reads the *fogged* board, so an opponent who is not drawn casts
+    nothing — a shadow with no snake over it would say precisely what the fog is
+    hiding.
+
 - **A shared board draws its snakes exactly as solo does**: same hard square,
-  same white eyes. Only the fill differs, and only because five snakes have to
-  be told apart. A room is meant to look like the game, not like a different one.
+  same white eyes. Only the fill and the shadow under it differ, and both only
+  because five snakes have to be told apart from each other and from one flat
+  ground. A room is meant to look like the game, not like a different one.
 - **The body is square; only the two *ends* round** (`web/lib/snakeEnds.ts`).
   A body cell is still `fillRect` on whole-pixel edges that neighbours share
   exactly, so segments tile seamlessly and nothing along the run is antialiased.
@@ -596,9 +686,22 @@ Rendering details that are load-bearing:
   `soloFocus` lights **only RUNNING**. The dark is the difficulty, and
   difficulty only applies while the game is being played: on READY you are still
   reading the board, PAUSED you have stopped playing, and GAME_OVER is a record
-  — a record you cannot read is no record. `visionFocus` drops the light for a
-  spectator for the same reason: they are out, so there is nothing left to hide
-  from them.
+  — a record you cannot read is no record.
+
+  **A room does the opposite: dying freezes the light rather than lifting it.**
+  `visionFocus` takes a third argument, the cell your own head was last seen on,
+  and stands the spotlight there the moment your snake is off the board — so
+  watching out the round and winning it are the same picture, and a dead player
+  is not handed the board the players still in it cannot see. It has to be
+  passed in because a dead snake arrives with **no cells at all**
+  (`MultiplayerPlayer.cells` returns `[]`), so nothing in the state says where
+  it was: `useGameSession` keeps `lastHead` while you are alive, clears it on
+  every `countdown` with the board, and the group `BoardView` carries it.
+  Spectators used to get the whole board back, on the reasoning that they were
+  out and had nothing left to hide from — that is the behaviour this replaced.
+  `null` is still a whole bright board, but only where there is nothing to
+  centre on at all: no `you` yet, no snake of ours in this room, or a death
+  before the first state arrived.
 
   **This is appearance, not enforcement.** The server still sends every snake's
   cells to everybody, so the fog hides opponents from the *player*, not from the
