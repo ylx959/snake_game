@@ -21,6 +21,62 @@ export interface CreaturePose {
   eyeY: number;
 }
 
+export interface ShakePose {
+  /** SVG units applied to the outer group. */
+  x: number;
+  /** Degrees about the favicon's 27,27 centre. */
+  rotation: number;
+}
+
+/**
+ * How long one activation runs, whatever the pointer does. The caller starts a
+ * clock and samples it; the length is stated here so the component never has to
+ * agree with a stylesheet about when the run is over.
+ */
+export const SHAKE_DURATION_SECONDS = 1.5;
+
+/** Nine there-and-backs, and the ends of the travel in the 54-unit box. */
+const SHAKE_CYCLES = 9;
+const SHAKE_X = 3.2;
+const SHAKE_ROTATION = 4.5;
+const neutralShake = (): ShakePose => ({ x: 0, rotation: 0 });
+
+/**
+ * One frame of the shake, from the run's own elapsed seconds.
+ *
+ * The half-sine envelope is what makes the body leave and return to neutral
+ * without a jump at either end: outside the run - before it, after it, or with
+ * a time that means nothing - the pose is exactly neutral, so a caller that
+ * samples late writes the same transform it started with.
+ *
+ * Reduced motion keeps the run and drops only the movement: the caller still
+ * holds a busy button for 1.5s and still advances the colour once, because the
+ * colour change is the point and the shaking is the decoration.
+ */
+export function shakePoseAt(localSeconds: number, reducedMotion = false): ShakePose {
+  if (
+    reducedMotion ||
+    !Number.isFinite(localSeconds) ||
+    localSeconds <= 0 ||
+    localSeconds >= SHAKE_DURATION_SECONDS
+  ) {
+    return neutralShake();
+  }
+
+  const progress = localSeconds / SHAKE_DURATION_SECONDS;
+  const envelope = Math.sin(Math.PI * progress);
+  const wave = Math.sin(progress * Math.PI * 2 * SHAKE_CYCLES);
+  return {
+    x: SHAKE_X * envelope * wave,
+    rotation: SHAKE_ROTATION * envelope * wave,
+  };
+}
+
+/** The one boundary the colour change hangs off. Never true for a bad time. */
+export function shakeCompleteAt(localSeconds: number): boolean {
+  return Number.isFinite(localSeconds) && localSeconds >= SHAKE_DURATION_SECONDS;
+}
+
 const clamp = (value: number, low: number, high: number): number =>
   Math.min(high, Math.max(low, value));
 

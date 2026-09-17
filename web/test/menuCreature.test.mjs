@@ -5,6 +5,9 @@ import {
   approachCreatureAim,
   blinkScaleAt,
   creaturePose,
+  SHAKE_DURATION_SECONDS,
+  shakeCompleteAt,
+  shakePoseAt,
   normalizeCreatureAim,
 } from "../lib/menuCreature.ts";
 
@@ -48,4 +51,35 @@ test("blink sampling is deterministic and reopens fully", () => {
   assert.equal(blinkScaleAt(4.12), blinkScaleAt(4.12));
   assert.ok(blinkScaleAt(4.12) < 0.2);
   assert.equal(blinkScaleAt(4.4), 1);
+});
+
+test("a shake starts and finishes at the neutral whole-body pose", () => {
+  assert.equal(SHAKE_DURATION_SECONDS, 1.5);
+  assert.deepEqual(shakePoseAt(0), { x: 0, rotation: 0 });
+  assert.deepEqual(shakePoseAt(1.5), { x: 0, rotation: 0 });
+  assert.deepEqual(shakePoseAt(2), { x: 0, rotation: 0 });
+  assert.equal(shakeCompleteAt(1.499), false);
+  assert.equal(shakeCompleteAt(1.5), true);
+});
+
+test("the body alternates left and right during the run", () => {
+  const right = shakePoseAt(SHAKE_DURATION_SECONDS / 36);
+  const left = shakePoseAt((SHAKE_DURATION_SECONDS * 3) / 36);
+  assert.ok(right.x > 0 && right.rotation > 0);
+  assert.ok(left.x < 0 && left.rotation < 0);
+});
+
+test("the whole shake stays within its declared travel", () => {
+  for (let frame = 0; frame <= 180; frame += 1) {
+    const pose = shakePoseAt(frame / 120);
+    assert.ok(Math.abs(pose.x) <= 3.2 + 1e-12);
+    assert.ok(Math.abs(pose.rotation) <= 4.5 + 1e-12);
+  }
+});
+
+test("reduced motion and invalid time produce a neutral pose", () => {
+  assert.deepEqual(shakePoseAt(0.4, true), { x: 0, rotation: 0 });
+  assert.deepEqual(shakePoseAt(Number.NaN), { x: 0, rotation: 0 });
+  assert.deepEqual(shakePoseAt(Number.POSITIVE_INFINITY), { x: 0, rotation: 0 });
+  assert.equal(shakeCompleteAt(Number.NaN), false);
 });
