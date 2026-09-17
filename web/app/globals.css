@@ -1,29 +1,6 @@
-/*
- * Three themes, and the difference between them is the whole point.
- *
- * A **solo run** wears the palette: `--bg` and `--fg` are the pair the server's
- * `palette` index picked, and a bite of the apple repaints the document at
- * once. That colour flip is the solo game's signature and it belongs to the
- * solo game alone.
- *
- * **Loading, a lobby, a shared board, a result** are black ground and white
- * type. Those screens are not the game, and one that changed colour because of
- * something a stranger ate in another room was never saying anything. A shared
- * board is black for the same reason plus one more: five player colours have to
- * be told apart, and they do that far better against one fixed ground than
- * against eight moving ones.
- *
- * **The menu** is the third: six flat colours, advanced by the player. It says
- * nothing either - pressing the mascot changes the colour, and the colour is
- * not a report about anything. See `data-theme="pop"` below.
- * Only the *ground* pops. Everything on the menu a player operates - the three
- * buttons and every card - is black with white type on all six colours, so the
- * one screen where somebody has to read a leaderboard and type a name into a
- * box never moves under them.
- *
- * All three are the same five tokens, so no rule below is written twice.
- * `page.tsx` picks between them with `data-theme` on `.screen`.
- */
+/* Three themes on one set of tokens: a solo run wears the server's palette pair
+ * and repaints on every apple, the other screens are black and white, and the
+ * menu is six flat grounds. `page.tsx` picks with `data-theme` on `.screen`. */
 
 :root {
   /* The letterbox around the stage. Always black - it is the edge of the
@@ -41,10 +18,8 @@
   --band: rgba(0, 0, 0, 0.08); /* 表格的隔行底色 */
   --emboss: var(--fg); /* 大字的位移陰影 */
 
-  /* 一格有多少 px。由 page.tsx 每次量完視窗後寫進 .stage，
-     整個介面（字級、內距、間距）都是用它的倍數算出來的，
-     所以視窗一縮，棋盤和文字是「同一個比例」一起縮，不會各縮各的。
-     這裡的 28px 只是伺服器狀態還沒到之前的暫定值。 */
+  /* 一格有多少 px。page.tsx 量完視窗寫進 .stage，整個介面都是它的倍數，
+     所以視窗一縮，棋盤和文字是同一個比例一起縮。28px 只是還沒量到前的暫定值。 */
   --cell: 28px;
 
   /* One knob for the chunky border-and-drop-shadow look.
@@ -53,11 +28,9 @@
   --edge: 0.45em;
 }
 
-/* Everything that is not a solo run. Black ground, white type, and no palette
-   anywhere - the same tokens, inverted.
-
-   ⚠️ `--void` is deliberately *not* redefined here: the letterbox stays black
-   in both themes. If it followed `--ink` it would turn white around the board. */
+/* Everything that is not a solo run: the same tokens, inverted.
+   ⚠️ `--void` is deliberately *not* redefined - the letterbox stays black in
+   both themes, and following `--ink` would turn it white around the board. */
 .screen[data-theme="dark"] {
   --bg: #000000;
   --fg: #ffffff;
@@ -70,29 +43,9 @@
   --emboss: transparent;
 }
 
-/* The **menu**, and only the menu. Six flat colours, advanced by hand.
-
-   It is the solo palette's idea moved to the title page - a hard cut, never a
-   fade - with two differences: it says nothing, because a menu is not a run, and
-   it moves only when a player presses the mascot and its shake finishes. There
-   is no timer behind it. `page.tsx` supplies `--bg`
-   and `data-ink` from MENU_COLORS; every token below is derived from those two,
-   so retuning a hex is a one-line change in lib/palette.ts.
-
-   Two ways round rather than one, because the six are not equally light.
-   #FFE93D, #22DFF5, #3EE03E, #FF4A1F and #FF0CBA all carry black type at 6:1 or
-   better; #4B2BEE manages 2.9:1 against black and 7.3:1 against white, so it -
-   and only it - turns over. Which way round each goes is measured in
-   lib/palette.ts, not guessed here.
-
-   ⚠️ `--emboss` is **black in both**, not `--fg`. It is the drop shadow the
-   type on this screen wears, and following `--fg` would put a white shadow
-   under white type on #4B2BEE, which is a smear rather than an edge. Black is
-   also what the lede and the note need against the five light grounds, where a
-   shadow in the ground's own foreground would vanish into it.
-
-   ⚠️ `--void` is not redefined, for the same reason the dark theme leaves it
-   alone: the letterbox is the edge of the screen, not part of the picture. */
+/* The **menu**, and only the menu: six flat grounds from MENU_COLORS, advanced
+   by hand and reporting nothing. Five carry black type; #4B2BEE alone turns
+   over below. ⚠️ `--emboss` is black in both, and `--void` is left alone. */
 .screen[data-theme="pop"] {
   --fg: #000000;
   --ink: #000000;
@@ -112,26 +65,9 @@
   --band: rgba(255, 255, 255, 0.1);
 }
 
-/* ⚠️ The two blocks above dress the **type standing on the ground** - the
-   lede, the note under the buttons - and nothing else. The heading takes no
-   pair at all: it is the mascot, black and white on every colour. Everything a
-   player touches is black on this screen whatever colour is behind it: the
-   cards say so themselves (`tone="ink"` on every Panel in MenuScreen), and the
-   home view's three buttons are the one control with no card around them, so
-   they flip the same five tokens here.
-
-   Black on all six grounds rather than the ground's own opposite, because a
-   button is a thing and the ground is a backdrop: one fixed object that the
-   colour passes behind reads as furniture; one that turns over with the colour
-   reads as more of the flashing. It is also the difference between a control
-   that is always in the same place and one a player has to re-find every time
-   the ground turns over.
-
-   `--shadow` is pinned black here rather than inherited: on #4B2BEE the pair
-   above has already turned it white for white type, and a white offset under a
-   black button is a glow, not the hard drop every other button on the site
-   wears. Hover is untouched and still `--ink` on `--bg`, so a hovered button
-   goes white with the menu's own colour as its type. */
+/* ⚠️ The pairs above dress only the type standing on the ground. Every control
+   is black with white type on all six grounds - furniture the colour passes
+   behind - and `--shadow` is pinned black, since white on a colour is a haze. */
 .screen[data-theme="pop"] .controls {
   --ink: #ffffff;
   --paper: #000000;
@@ -144,11 +80,9 @@
   color: var(--ink);
 }
 
-/* And the cards' drop shadow, for the same reason as the buttons' above. The
-   ink tone's shadow is white because it is normally cast on black - the Game
-   Over card. Here it falls on the colour, where white is a haze and black is
-   the hard offset the rest of the site wears. The white *border* stays: it is
-   what separates a black card from #4B2BEE. */
+/* The cards' shadow, for the same reason: the ink tone's is white because it
+   normally falls on black - the Game Over card. The white *border* stays; it
+   is what separates a black card from #4B2BEE. */
 .screen[data-theme="pop"] .panel[data-tone="ink"] {
   --shadow: rgba(0, 0, 0, 0.6);
 }
@@ -192,17 +126,14 @@ body {
   position: fixed; /* 相對於「視窗」定位，不跟著頁面捲動 */
   inset: 0; /* = top:0; right:0; bottom:0; left:0 一次寫完，等於貼滿整個視窗 */
   background: var(--void);
-  /* ⚠️ 這行是主題能生效的關鍵，不是重複宣告。
-     色彩是「繼承計算後的值」——body 已經把 color 算成黑色了，子元素繼承到的
-     是那個黑，不會因為 .screen 重新定義了 --ink 就跟著變。
-     在主題的邊界上重新寫一次 color，整棵子樹才會拿新的 --ink 重算。 */
+  /* ⚠️ 關鍵，不是重複宣告：color 繼承的是「算好的值」，body 已經算成黑色，
+     光重新定義 --ink 不會讓它重算。在主題邊界重寫一次，整棵子樹才會跟著變。 */
   color: var(--ink);
 }
 
-/* 遊戲本體：一個固定長寬比（伺服器的 48×27，正好 16:9）的框，
-   在視窗裡放到最大並置中。left/top/width/height 由 page.tsx 量完寫成行內樣式；
-   inset: 0 是還沒量到之前的後備值（行內的 left/width 會蓋過 right，
-   因為同時給 left + width + right 是「過度指定」，瀏覽器會丟掉 right）。 */
+/* 遊戲本體：固定 16:9 的框，在視窗裡放到最大並置中。left/top/width/height 由
+   page.tsx 量完寫成行內樣式，inset: 0 只是還沒量到前的後備值
+   （同時給 left + width + right 是過度指定，瀏覽器會丟掉 right）。 */
 .stage {
   position: absolute;
   inset: 0;
@@ -213,12 +144,9 @@ body {
   isolation: isolate;
 }
 
-/* ⚠️ .board 和 .ui 的 z-index 是必要的，不是保險。
-   兩個都是 position: absolute 而沒寫 z-index 時，規格說「照 DOM 順序疊」，
-   canvas 在前所以在下面——但 canvas 每 0.10 秒重畫一次，瀏覽器很可能把它
-   丟到 GPU 的獨立圖層上，某些瀏覽器在這種情況下會讓那一層蓋住上面的 DOM。
-   症狀是「遊戲一開始跑，按鈕就不見了，一暫停又回來」。
-   寫明 z-index 之後順序就不再是推導出來的，而是指定的。 */
+/* ⚠️ .board 和 .ui 的 z-index 是必要的：不寫的話順序只是照 DOM 推導出來的，
+   而每 0.10 秒重畫的 canvas 會被丟上 GPU 圖層，可能反過來蓋住上面的 DOM
+   （症狀：遊戲一跑按鈕就不見，一暫停又回來）。寫明了才是指定的。 */
 .board {
   position: absolute;
   inset: 0;
@@ -279,10 +207,8 @@ body {
 /* --- the one big line, as in the reference art --------------------------- */
 
 .prompt {
-  /* 棋盤正中央。.ui 是 position: absolute，所以它就是這個絕對定位的基準，
-     而它 inset: 0 貼滿 .stage，因此 50% 就是棋盤正中（不是視窗正中）。
-     transform 的 -50% 是相對「元素自己的尺寸」算的，所以不必事先知道
-     這行字有多寬多高——這是水平垂直置中最可靠的寫法。 */
+  /* 棋盤正中央：.ui 貼滿 .stage 又是絕對定位的基準，所以 50% 是棋盤中心而不是
+     視窗中心；transform 的 -50% 相對元素自己的尺寸，不必先知道這行字多寬。 */
   position: absolute;
   top: 50%;
   left: 50%;
@@ -338,12 +264,9 @@ body {
   gap: calc(var(--cell) * 0.5); /* 按鈕之間留半格 */
 }
 
-/* 遊戲跑起來就把控制列收起來，讓畫面只剩棋盤和蛇。
-   用 visibility 而不是 display: none 或把元素從 DOM 拿掉，有兩個理由：
-   1. 按鈕必須留在 DOM 裡。Space / R 的作法是「找到那顆按鈕再按下去」
-      （lib/input.ts），元素不在就沒東西可按，也就再也回不來了。
-   2. visibility: hidden 會保留版面位置，所以按鈕回來時下面的 hint 不會跳動。
-   它同時也擋掉滑鼠事件（看不見的東西不該點得到），但 button.click() 不受影響。 */
+/* 遊戲一跑就收起控制列。用 visibility 而不是 display: none 或拿掉元素：
+   Space / R 是「找到那顆按鈕再按下去」（lib/input.ts），元素不在就回不來了；
+   保留版面位置也讓按鈕回來時下面的 hint 不會跳動。 */
 .controls[data-hidden] {
   visibility: hidden;
 }
@@ -359,11 +282,13 @@ body {
   text-transform: uppercase;
   /* 兩個值 = 上下 / 左右。改用 em（1.2em ≈ 原本的 11px、1.8em ≈ 16px），
      所以按鈕的內距是跟著字級走的——字變小，整顆按鈕就跟著變小。 */
-  padding: 1.0em 1.6em;
+  padding: 1em 1.6em;
   color: var(--ink);
   background: var(--surface); /* 淺色主題是接近白的灰，深色主題是黑 */
   border: var(--edge) solid var(--ink); /* border: 寬度 樣式 顏色（靠型別辨認，順序可換） */
-  border-radius:8; /* 明確蓋掉瀏覽器給 button 的預設圓角，維持硬邊像素感 */
+  /* 圓角。用 em 而不是 px，跟上面的邊框和下面的影子一樣跟著字級縮——
+     0.9em 在預設格寬下差不多是 8px，視窗變小時角也跟著收。 */
+  border-radius: 0.9em;
   /* box-shadow: X Y blur spread color; 用 em 讓影子跟著按鈕一起縮。 */
   box-shadow: 0.55em 0.55em 0 var(--shadow);
   cursor: pointer;
@@ -385,10 +310,9 @@ body {
   color: var(--bg);
 }
 
-/* Press the button into its own shadow.
-   [data-pressed] 是鍵盤版：Space / R 按住的時候，lib/input.ts 會把這個屬性
-   加在對應的按鈕上，讓鍵盤看起來跟滑鼠按下去一模一樣。
-   屬性選擇器只看「有沒有這個屬性」，值是空字串也算有。 */
+/* Press the button into its own shadow。[data-pressed] 是鍵盤版：Space / R
+   按住時 lib/input.ts 把這個屬性加上去，讓鍵盤跟滑鼠按起來一模一樣
+   （屬性選擇器只看有沒有這個屬性，值是空字串也算有）。 */
 .controls button:active:not(:disabled),
 .controls button[data-pressed]:not(:disabled),
 .panel__actions button:active:not(:disabled) {
@@ -405,31 +329,25 @@ body {
 }
 
 .hint {
-  /* ⚠️ `10` 沒有單位，這條宣告不合法會被瀏覽器丟掉，
-     所以現在生效的是 <p> 的預設上下邊距（約 1em），既不是 10px 也不是 0。
-     要 10px 就寫 `10px`，要貼齊就寫 `0`。 */
-  margin: 10;
+  margin: 1em 0; /* <p> 的預設上下邊距，寫明而不是靠瀏覽器 */
   font-size: max(5px, calc(var(--cell) * 0.28)); /* 同 .hud，以格為單位 */
   letter-spacing: 0.2em;
   text-align: center;
-  opacity: 1; /* 0 = 全透明，1 = 完全不透明。設成 1 等於沒作用，這行可以刪掉 */
 }
 
 /* --- 被蛇照亮的文字（分數、狀態、底部提示共用）--------------------------- */
 
-/* 外層：白色副本是絕對定位的，要以「這一段字自己」為基準，所以要 relative。
-   沒有這行的話，它會往上找到最近的 .screen，位置就整個跑掉。
-   inline-block 是為了讓這一段有明確的外框可以量——純 inline 的元素
-   換行時會拆成多個框，絕對定位的子元素就對不準了。 */
+/* 外層：白色副本是絕對定位的，要以這一段字自己為基準，所以要 relative，不然會
+   往上找到 .screen；inline-block 則是為了有個明確的外框可以量——純 inline 換行
+   時會拆成多個框，絕對定位的子元素就對不準了。 */
 .lit {
   position: relative;
   display: inline-block;
 }
 
-/* 同一行字的白色副本，精準疊在黑字上面。字型、字距、對齊全部繼承自外層，
-   所以兩份的字元會落在完全相同的位置。
-   clip-path 由 LitText.tsx 每個 tick 算出來：內容是蛇佔的那幾格矩形，
-   所以只有「被蛇蓋到」的那一段白字看得見，其餘被裁掉、露出底下的黑字。 */
+/* 同一行字的白色副本，字型字距對齊全部繼承自外層，所以兩份字元疊得剛剛好。
+   clip-path 由 LitText.tsx 每個 tick 算出蛇佔的那幾格，只有被蛇蓋到的那一段
+   白字看得見，其餘被裁掉、露出底下的黑字。 */
 .lit__over {
   position: absolute;
   left: 0;
@@ -455,15 +373,9 @@ body {
 }
 
 
-/* ========================================================================== *
- * Screens outside the board: loading, menus, lobby, results.
- *
- * Same two colours and the same black. Everything is sized in `--cell`, like
- * the board and the readouts, so the whole interface still scales by the one
- * factor - a menu at 400px wide is the same drawing as a menu at 2000px, not a
- * different layout. `max(…px, …)` floors each size, because the pixel font
- * turns to mush below about 6px.
- * ========================================================================== */
+/* --- screens outside the board: loading, menus, lobby, results ------------
+   Sized in `--cell` like the board, so the whole interface scales by the one
+   factor; `max(…px, …)` floors each size - the pixel font mushes below ~6px. */
 
 /* .ui lets clicks through to the canvas; anything a player types into or
    presses has to take them back. */
@@ -491,25 +403,24 @@ body {
    `line-height: 0` stops the line box adding leading under a block-level SVG. */
 .menu-creature-heading {
   margin: 0;
-  /* A column, so the caption under the mascot is laid out rather than left to
-     the SVG's inline baseline - which is also what the `line-height: 0` was
-     for. It stays, because a flex item still inherits it, and `.tap-me`
-     re-declares its own. The `h1` is `position: absolute`, so it takes no
-     part in the column. */
+  /* A column, so the caption is laid out rather than left to the SVG's inline
+     baseline. `line-height: 0` stays - a flex item still inherits it, and
+     `.tap-me` re-declares its own. The absolute `h1` takes no part in it. */
   display: flex;
   flex-direction: column;
   align-items: center;
   line-height: 0;
 }
 
-/* The one line on this screen that says the mascot is a thing you press. It
-   stands directly on the ground with nothing behind it, so - like the lede and
-   the note - it simply inherits the pop pair's measured `--ink` rather than
-   declaring a colour of its own. It does not blink, pulse or slide: the menu
-   holds still, and the creature is the only thing on it that moves. */
+/* The one line that says the mascot is a thing you press. Standing on the bare
+   ground, it inherits the pop pair's measured `--ink` like the lede and the
+   note, and it never blinks or slides: the creature is the only thing moving. */
 .tap-me {
   margin: calc(var(--cell) * 0.46) 0 0;
-  font-size: max(7px, calc(var(--cell) * 0.3));
+  /* Larger than the lede under it (0.342): it is the only thing on the screen
+     that says the picture is a control, so it has to read before the prose
+     does. Floored higher than the rest for the same reason. */
+  font-size: max(11px, calc(var(--cell) * 0.48));
   line-height: 1.6;
   letter-spacing: 0.14em;
   /* The tracking is spare on the right of the last glyph; half of it back
@@ -519,11 +430,9 @@ body {
 
 .menu-creature {
   display: block;
-  /* The fallback pair, for the instance that is given no colour: the loading
-     screen's mascot, which inverts with `data-theme="dark"` below. On the menu
-     the head is painted from `MenuColor.creature` as an inline `fill` and the
-     eyes are literal white, so neither token applies there - the creature is a
-     picture on that screen, not type, and takes no part in --ink's turn-over. */
+  /* The fallback pair, for the propless instance - the loading screen's mascot,
+     inverted by `data-theme="dark"` below. The menu's paints its head from
+     `MenuColor.creature` inline and its eyes white, so neither token applies. */
   --creature-head: #000000;
   --creature-eye: #ffffff;
   /* Twice the width the word took: a drawing needs room type does not. In
@@ -534,17 +443,9 @@ body {
   overflow: visible;
 }
 
-/* The mascot as a control: a reset, a cursor and a focus ring, and nothing
-   that moves. Every bit of the shake's geometry is sampled in
-   lib/menuCreature.ts and written onto the SVG's outer group, so there is no
-   `transition`, `animation` or `:active` transform here to disagree with it.
-
-   The cursor stays `pointer` for the whole run. It briefly turned to
-   `progress`, and that was wrong twice over: the shake is the page answering
-   the press rather than a wait imposed on the player, and a spinner beside a
-   creature that is visibly already doing the thing reads as a page that has
-   stalled. Nothing here changes its looks mid-run, so the button carries no
-   shaking attribute either - `aria-busy` alone announces it. */
+/* The mascot as a control: a reset, a cursor and a focus ring, nothing that
+   moves - the shake is sampled in lib/menuCreature.ts onto the SVG, so nothing
+   here can disagree. The cursor stays `pointer`: a shake answers, it is no wait. */
 .menu-creature-button {
   display: block;
   padding: 0;
@@ -569,7 +470,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: calc(var(--cell) * 0.63); /* .screenful's 0.7, at 0.9 */
-  margin-top: calc(var(--cell) * 1.4);
+  margin-top: calc(var(--cell) * 0.5);
   width: 100%;
 }
 
@@ -579,11 +480,6 @@ body {
 
 .home-below .controls {
   gap: calc(var(--cell) * 0.45); /* .controls' 0.5, at 0.9 */
-}
-
-.home-below .controls--stack {
-  /* At 0.9 too, or the buttons keep full width while their type shrinks. */
-  max-width: calc(var(--cell) * 10.8);
 }
 
 .home-below .controls button {
@@ -646,7 +542,6 @@ body {
   width: calc(var(--cell) * 0.5);
   height: calc(var(--cell) * 0.5);
   border-radius: 15%;
-  background: transparent;
   box-shadow: inset 0 0 0 max(1px, calc(var(--cell) * 0.04)) var(--ink);
 }
 
@@ -673,27 +568,22 @@ body {
   max-height: 100%;
   margin: auto 0;
   padding: calc(var(--cell) * 0.8);
-  /* --paper, not --bg. On the dark screens the two are the same black, so
-     nothing changes there; on a solo run --bg is whatever pair the palette is
-     wearing, and a card in that colour reads as part of the board rather than
-     as a card sitting on it. White is the sheet the score is printed on. */
+  /* --paper, not --bg: on the dark screens they are the same black, but on a
+     solo run a card in the palette's --bg reads as part of the board rather
+     than as a card on it. White is the sheet the score is printed on. */
   background: var(--paper);
-  /* ⚠️ 用「格」而不是 --edge（那是 em）。
-     按鈕的粗邊是刻意的，它跟著按鈕自己的字級縮放很合理；但卡片是一個大面，
-     它的外框不該跟著「裡面的字有多大」變粗——字級一調，框就莫名其妙變粗了。
-     改用格之後，這條線只跟棋盤的比例有關，跟內容無關。 */
+  /* ⚠️ 用「格」而不是 --edge（那是 em）：按鈕的邊跟著自己的字級縮放很合理，
+     但卡片是一個大面，外框不該跟著「裡面的字有多大」變粗。改用格之後，這條線
+     只跟棋盤的比例有關，跟內容無關。 */
   border: max(2px, calc(var(--cell) * 0.12)) solid var(--ink);
   box-shadow: calc(var(--cell) * 0.28) calc(var(--cell) * 0.28) 0 var(--shadow);
   /* 卡片裡所有內容（名單、表格、說明）的基準字級。 */
   font-size: max(8px, calc(var(--cell) * 0.38));
 }
 
-/* 永遠是黑底白字的卡片，不管背後那一頁是什麼主題。
-   跟 .screen[data-theme="dark"] 是同一套 token，只是作用範圍縮到這張卡片上。
-
-   ⚠️ 這裡要重寫一次 color，理由跟 .screen 那條一模一樣：
-   色彩是「繼承計算後的值」，外面已經把 color 算成黑色了，
-   光是在這裡重新定義 --ink 不會讓已經繼承下來的黑色重算。 */
+/* 永遠黑底白字的卡片，不管背後是什麼主題——跟 .screen[data-theme="dark"] 同一
+   套 token，只是作用範圍縮到這張卡片上。⚠️ color 要重寫一次，理由同 .screen：
+   繼承下來的是算好的黑，光重新定義 --ink 不會讓它重算。 */
 .panel[data-tone="ink"] {
   --bg: #000000;
   --fg: #ffffff;
@@ -707,7 +597,7 @@ body {
 }
 
 /* 寬度以「格」為單位，跟畫面上其他東西同一個比例。
-   卡片寬到它的內容需要的寬度為止，不是寬到畫面允許的寬度為止。 */
+   卡片寬到內容需要的寬度為止，不是寬到畫面允許的寬度為止。 */
 .panel[data-size="narrow"] {
   max-width: calc(var(--cell) * 22);
 }
@@ -869,10 +759,10 @@ body {
   align-items: center;
   gap: 0.5em;
   /* A nickname is twelve characters, but a narrow stage is narrower than that
-     plus a score - clip rather than wrap into a second line. */
+     plus a score - clip rather than wrap into a second line. No ellipsis: this
+     is a flex container, and text-overflow only applies to block ones. */
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -917,16 +807,9 @@ body {
 
 /* --- during a round ------------------------------------------------------- */
 
-/* 遊戲區域的邊界。
-   棋盤是黑的，黑邊也是黑的，所以「哪裡是牆」在共用棋盤上完全看不出來——
-   單人模式不需要這條線，因為底色是palette的顏色，邊界自己就分明。
-
-   用 inset 的 box-shadow 而不是 border：border 會佔掉版面（box-sizing 之下
-   canvas 就不再剛好是 .stage 那麼大），而 fitBoard() 算出來的整數格線
-   一旦被擠掉一兩個像素，每一格就不再是正方形。
-   這一層是 .ui 的子元素，而 .ui 的 z-index 在 canvas 之上，所以線畫得到棋盤上面。
-
-   顏色用 --ink：在深色主題裡它就是白的，語意是「前景」而不是「白色」。 */
+/* 共用棋盤的牆，單人不需要。用 inset 的 box-shadow 而不是 border：border 會佔
+   版面，canvas 就不再剛好是 .stage，fitBoard() 的整數格線一被擠掉一兩個像素，
+   每一格就不再是正方形。顏色用 --ink，語意是「前景」而不是白或黑。 */
 .boundary {
   position: absolute;
   inset: 0;
@@ -934,11 +817,9 @@ body {
   box-shadow: inset 0 0 0 max(2px, calc(var(--cell) * 0.1)) var(--ink);
 }
 
-/* 跟著自己那條蛇的小名牌。
-   取代了原本畫在頭上的白框：白框只有「已經知道要找它」的人看得懂，
-   名字是直接講出來的，而且跟角落名單講的是同一件事。
-   位置用「棋盤的百分比」——.ui 是 inset: 0 蓋滿 .stage，所以 0–100% 就是棋盤本身，
-   不需要量任何東西，視窗一縮它自己就還在正確的格子上。 */
+/* 跟著自己那條蛇的小名牌，取代原本畫在頭上的白框——白框只有已經知道要找它的人
+   看得懂。位置用「棋盤的百分比」：.ui 貼滿 .stage，所以 0–100% 就是棋盤本身，
+   不必量任何東西，視窗一縮它自己還在正確的格子上。 */
 .nametag {
   position: absolute;
   font-size: max(5px, calc(var(--cell) * 0.3));
@@ -1025,10 +906,12 @@ body {
   letter-spacing: 0.1em;
 }
 
-/* Buttons stacked rather than in a row, for the main menu's three choices. */
+/* Buttons stacked rather than in a row, for the main menu's three choices.
+   The width is the caption's 0.9 scale like everything else in .home-below,
+   which is the only place this modifier is used. */
 .controls--stack {
   flex-direction: column;
   align-items: stretch;
   width: 100%;
-  max-width: calc(var(--cell) * 12);
+  max-width: calc(var(--cell) * 10.8);
 }
