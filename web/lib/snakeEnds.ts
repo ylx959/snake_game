@@ -29,7 +29,7 @@ import type { Cell, Direction } from "@/types/game";
  * ends go square on their own - which is what you want: a 2px radius on an 8px
  * cell is not a rounded corner, it is a chewed one.
  */
-export const END_RADIUS = 0.3;
+export const END_RADIUS = 0.15;
 
 /**
  * One cell's four corners, in the order `roundRect` and CSS both use:
