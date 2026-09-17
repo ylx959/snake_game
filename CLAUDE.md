@@ -319,6 +319,18 @@ Two places bend that rule, both deliberately:
   heading folds its own label into the heading's accessible name. The loading
   screen, whose creature is not a control, still puts it in the `h1`.
 
+  **`TAP ME!` under the mascot is a caption, not the heading coming back.**
+  Nothing else on the screen says the picture is a control, and a mascot that
+  only reacts to a press nobody makes is a mascot that does nothing. It is a
+  `<p class="tap-me">` and it is `aria-hidden`: the button beside it is already
+  named, and a loose "Tap me!" in the accessibility tree is an instruction
+  pointing at nothing. It sits outside the button for the same reason the `h1`
+  does — text inside a control joins that control's accessible name. It
+  declares no colour, so like the lede and the note it inherits the pop pair's
+  measured `--ink` and turns white on `#4B2BEE` with them. And it holds
+  perfectly still: no blink, no pulse, no slide. The creature is still the only
+  thing on this screen that moves.
+
   The mascot is sized at `--cell * 10.8` and the caption under it —
   `.home-below`, holding the lede, the three buttons and the note — is the
   interface's usual `--cell` multiples written at 0.9, plus a top margin holding

@@ -491,7 +491,30 @@ body {
    `line-height: 0` stops the line box adding leading under a block-level SVG. */
 .menu-creature-heading {
   margin: 0;
+  /* A column, so the caption under the mascot is laid out rather than left to
+     the SVG's inline baseline - which is also what the `line-height: 0` was
+     for. It stays, because a flex item still inherits it, and `.tap-me`
+     re-declares its own. The `h1` is `position: absolute`, so it takes no
+     part in the column. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   line-height: 0;
+}
+
+/* The one line on this screen that says the mascot is a thing you press. It
+   stands directly on the ground with nothing behind it, so - like the lede and
+   the note - it simply inherits the pop pair's measured `--ink` rather than
+   declaring a colour of its own. It does not blink, pulse or slide: the menu
+   holds still, and the creature is the only thing on it that moves. */
+.tap-me {
+  margin: calc(var(--cell) * 0.46) 0 0;
+  font-size: max(7px, calc(var(--cell) * 0.3));
+  line-height: 1.6;
+  letter-spacing: 0.14em;
+  /* The tracking is spare on the right of the last glyph; half of it back
+     keeps the line optically centred under the head. */
+  text-indent: 0.14em;
 }
 
 .menu-creature {
