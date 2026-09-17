@@ -3,8 +3,12 @@ import test from "node:test";
 
 import {
   approachCreatureAim,
+  approachExpressionPose,
   blinkScaleAt,
+  creatureExpressionAt,
   creaturePose,
+  expressionPose,
+  IDLE_TIRED_SECONDS,
   SHAKE_DURATION_SECONDS,
   shakeCompleteAt,
   shakePoseAt,
@@ -82,4 +86,90 @@ test("reduced motion and invalid time produce a neutral pose", () => {
   assert.deepEqual(shakePoseAt(Number.NaN), { x: 0, rotation: 0 });
   assert.deepEqual(shakePoseAt(Number.POSITIVE_INFINITY), { x: 0, rotation: 0 });
   assert.equal(shakeCompleteAt(Number.NaN), false);
+});
+
+test("expression priority is angry, then tired, then neutral", () => {
+  assert.equal(IDLE_TIRED_SECONDS, 5);
+  assert.equal(creatureExpressionAt(false, 4.999), "neutral");
+  assert.equal(creatureExpressionAt(false, 5), "tired");
+  assert.equal(creatureExpressionAt(false, 90), "tired");
+  assert.equal(creatureExpressionAt(true, 90), "angry");
+  assert.equal(creatureExpressionAt(false, Number.NaN), "neutral");
+});
+
+test("the three expression poses use the approved capsule geometry", () => {
+  assert.deepEqual(expressionPose("neutral"), {
+    left: { width: 13, height: 25, rotation: 0 },
+    right: { width: 13, height: 25, rotation: 0 },
+  });
+  assert.deepEqual(expressionPose("tired"), {
+    left: { width: 16, height: 5, rotation: 0 },
+    right: { width: 16, height: 5, rotation: 0 },
+  });
+  assert.deepEqual(expressionPose("angry"), {
+    left: { width: 17, height: 6, rotation: 24 },
+    right: { width: 17, height: 6, rotation: -24 },
+  });
+});
+
+const expressionNumbers = (pose) => [
+  pose.left.width,
+  pose.left.height,
+  pose.left.rotation,
+  pose.right.width,
+  pose.right.height,
+  pose.right.rotation,
+];
+
+test("expression interpolation is stable across frame sizes", () => {
+  const start = expressionPose("neutral");
+  const target = expressionPose("angry");
+  const oneFrame = approachExpressionPose(start, target, 1 / 30);
+  const halfA = approachExpressionPose(start, target, 1 / 60);
+  const halfB = approachExpressionPose(halfA, target, 1 / 60);
+
+  expressionNumbers(oneFrame).forEach((value, index) => {
+    assert.ok(Math.abs(value - expressionNumbers(halfB)[index]) < 1e-12);
+  });
+});
+
+test("an interrupted expression continues from the displayed composite", () => {
+  const displayed = approachExpressionPose(
+    expressionPose("neutral"),
+    expressionPose("tired"),
+    1 / 60,
+  );
+  assert.deepEqual(
+    approachExpressionPose(displayed, expressionPose("angry"), 0),
+    displayed,
+  );
+});
+
+test("every expression stays inside the head at full gaze travel", () => {
+  const centres = [15.5, 38.5];
+  const gazeTravel = 3.6;
+
+  const horizontalExtent = (eye) => {
+    const radians = Math.abs(eye.rotation) * Math.PI / 180;
+    return (
+      Math.cos(radians) * eye.width / 2
+      + Math.sin(radians) * eye.height / 2
+    );
+  };
+
+  for (const id of ["neutral", "tired", "angry"]) {
+    const pose = expressionPose(id);
+    assert.ok(
+      centres[0] - horizontalExtent(pose.left) - gazeTravel > 0,
+      `${id} left edge`,
+    );
+    assert.ok(
+      centres[1] + horizontalExtent(pose.right) + gazeTravel < 54,
+      `${id} right edge`,
+    );
+  }
+
+  const angry = expressionPose("angry");
+  assert.ok(angry.left.width / angry.left.height > 1.7);
+  assert.equal(angry.left.rotation, -angry.right.rotation);
 });

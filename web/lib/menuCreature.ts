@@ -28,6 +28,21 @@ export interface ShakePose {
   rotation: number;
 }
 
+/** What the face is saying. Ranked: angry beats tired beats neutral. */
+export type CreatureExpressionId = "neutral" | "tired" | "angry";
+
+export interface EyeShape {
+  width: number;
+  height: number;
+  /** SVG degrees about this eye's own centre; positive turns clockwise. */
+  rotation: number;
+}
+
+export interface EyeExpressionPose {
+  left: EyeShape;
+  right: EyeShape;
+}
+
 /**
  * How long one activation runs, whatever the pointer does. The caller starts a
  * clock and samples it; the length is stated here so the component never has to
@@ -169,4 +184,76 @@ export function blinkScaleAt(seconds: number): number {
   if (phase < BLINK_PERIOD - BLINK_DURATION) return 1;
   const progress = (phase - (BLINK_PERIOD - BLINK_DURATION)) / BLINK_DURATION;
   return Math.max(0.08, Math.abs(progress * 2 - 1));
+}
+
+/** How long the creature is left alone before its eyes go heavy. */
+export const IDLE_TIRED_SECONDS = 5;
+
+/** About 95% of the way in 180ms - a change of mood, not a snap. */
+const EXPRESSION_APPROACH_RATE = 17;
+
+/**
+ * The three faces, written out rather than derived. Neutral is the tall capsule
+ * the SVG is authored with; tired is the same eye squashed flat; angry is flat,
+ * a shade longer, and tilted *mirrored*, so both brows point at the nose.
+ */
+const EXPRESSION_POSES: Readonly<Record<CreatureExpressionId, EyeExpressionPose>> = {
+  neutral: {
+    left: { width: 13, height: 25, rotation: 0 },
+    right: { width: 13, height: 25, rotation: 0 },
+  },
+  tired: {
+    left: { width: 16, height: 5, rotation: 0 },
+    right: { width: 16, height: 5, rotation: 0 },
+  },
+  angry: {
+    left: { width: 17, height: 6, rotation: 24 },
+    right: { width: 17, height: 6, rotation: -24 },
+  },
+};
+
+/**
+ * Which face, from the two things that can claim it. The shake is asked about
+ * first and answered whole: it is the run that is angry, not the press, so an
+ * early release does not calm the creature down half way through.
+ */
+export function creatureExpressionAt(
+  shaking: boolean,
+  idleSeconds: number,
+): CreatureExpressionId {
+  if (shaking) return "angry";
+  if (Number.isFinite(idleSeconds) && idleSeconds >= IDLE_TIRED_SECONDS) return "tired";
+  return "neutral";
+}
+
+/** A copy, always: the caller eases its own pose in place and would otherwise
+    write over the catalogue the next target is read from. */
+export function expressionPose(id: CreatureExpressionId): EyeExpressionPose {
+  const pose = EXPRESSION_POSES[id];
+  return { left: { ...pose.left }, right: { ...pose.right } };
+}
+
+const approachEyeShape = (current: EyeShape, target: EyeShape, mix: number): EyeShape => ({
+  width: current.width + (target.width - current.width) * mix,
+  height: current.height + (target.height - current.height) * mix,
+  rotation: current.rotation + (target.rotation - current.rotation) * mix,
+});
+
+/**
+ * One frame of the change of face, eased exactly as the gaze is: the mix
+ * composes, so the speed is the same at 30Hz and 144Hz, and a target that
+ * changes mid-transition is picked up from the composite already on screen
+ * rather than from the expression it was heading for.
+ */
+export function approachExpressionPose(
+  current: EyeExpressionPose,
+  target: EyeExpressionPose,
+  deltaSeconds: number,
+): EyeExpressionPose {
+  const dt = clamp(Number.isFinite(deltaSeconds) ? deltaSeconds : 0, 0, 0.064);
+  const mix = 1 - Math.exp(-EXPRESSION_APPROACH_RATE * dt);
+  return {
+    left: approachEyeShape(current.left, target.left, mix),
+    right: approachEyeShape(current.right, target.right, mix),
+  };
 }
