@@ -9,16 +9,14 @@
  * this game where nothing is happening.
  *
  * It never pauses, not even while a player is part way through typing a
- * nickname. It does not have to: the only thing that moves is the title, and
- * the title is only on the home view - the buttons, the cards and the fields
- * hold perfectly still under every switch. An earlier version shook the whole
- * overlay and did need a guard.
- *
- * `beat` alternates "a"/"b" with every switch and exists only so CSS can
- * restart the shake. A CSS animation restarts when its *name* changes, not when
- * the element re-renders, so `globals.css` carries the same keyframes under two
- * names and this flips between them. The obvious alternative - `key={step}` to
- * force a remount - would throw away whatever the player had typed.
+ * nickname. It does not have to: nothing on the page moves with it. The
+ * buttons, the cards and the fields hold perfectly still under every switch,
+ * and the mascot at the top of the home view has a clock of its own that owes
+ * this one nothing. An earlier version shook the whole overlay and did need a
+ * guard; one after it knocked the title on every switch, which is why this hook
+ * used to hand back an alternating `beat` for CSS to restart an animation with.
+ * The title is a creature now and there is no animation left to restart, so the
+ * colour is all this returns.
  */
 
 import { useEffect, useState } from "react";
@@ -36,7 +34,7 @@ import { menuColorAt, type MenuColor } from "@/lib/palette";
  */
 const HOLD_MS = 5600;
 
-export function useMenuPop(active: boolean): { color: MenuColor; beat: "a" | "b" } {
+export function useMenuPop(active: boolean): { color: MenuColor } {
   const [step, setStep] = useState(0);
 
   useEffect(() => {
@@ -45,5 +43,5 @@ export function useMenuPop(active: boolean): { color: MenuColor; beat: "a" | "b"
     return () => window.clearInterval(id);
   }, [active]);
 
-  return { color: menuColorAt(step), beat: step % 2 === 0 ? "a" : "b" };
+  return { color: menuColorAt(step) };
 }

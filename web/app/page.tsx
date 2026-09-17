@@ -76,12 +76,12 @@ export default function Home() {
   const onBoard = palette !== null || view?.mode === "group";
 
   // The menu is the third theme. It is not a board and it is not one of the
-  // black text screens: it cycles five flat colours on a timer and jolts on
-  // every switch, which is what an attract screen is for. Only `--bg` and which
-  // way round the type goes come from here; the rest of the pair is the
-  // `data-theme="pop"` block in globals.css. The shake is a CSS animation on
-  // the title, which punches and rattles as the ground changes colour under it.
-  // `data-pop` alternating is what restarts it - see useMenuPop.
+  // black text screens: it cycles six flat colours on a timer, which is what an
+  // attract screen is for. The hook drives that background colour and nothing
+  // else. Only `--bg` and which way round the type goes come from here; the
+  // rest of the pair is the `data-theme="pop"` block in globals.css. What moves
+  // on the screen is the mascot in the heading, and it keeps its own clock -
+  // see components/ui/MenuCreature.tsx.
   const menu = useMenuPop(phase === "menu");
   const theme = onBoard ? undefined : phase === "menu" ? "pop" : "dark";
 
@@ -133,7 +133,6 @@ export default function Home() {
               leaderboard={session.leaderboard}
               error={session.error}
               dismissError={session.dismissError}
-              beat={menu.beat}
             />
           )}
 

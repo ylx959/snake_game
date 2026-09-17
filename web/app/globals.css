@@ -83,12 +83,11 @@
    and only it - turns over. Which way round each goes is measured in
    lib/palette.ts, not guessed here.
 
-   ⚠️ `--emboss` is **black in both**, not `--fg`. The title is ChromaticText,
-   whose three channels screen back to white through the body of every glyph,
-   and white on #22DFF5 is 1.4:1 - not type at all. The black offset shadow is
-   the edge it reads against. It costs nothing on the two outer channels: they
-   are `mix-blend-mode: screen`, and screen with black is the identity, so only
-   the middle channel's shadow ever paints. One clean shadow, not three.
+   ⚠️ `--emboss` is **black in both**, not `--fg`. It is the drop shadow the
+   type on this screen wears, and following `--fg` would put a white shadow
+   under white type on #4B2BEE, which is a smear rather than an edge. Black is
+   also what the lede and the note need against the five light grounds, where a
+   shadow in the ground's own foreground would vanish into it.
 
    ⚠️ `--void` is not redefined, for the same reason the dark theme leaves it
    alone: the letterbox is the edge of the screen, not part of the picture. */
@@ -112,7 +111,8 @@
 }
 
 /* ⚠️ The two blocks above dress the **type standing on the ground** - the
-   title, the lede, the note under the buttons - and nothing else. Everything a
+   lede, the note under the buttons - and nothing else. The heading takes no
+   pair at all: it is the mascot, black and white on every colour. Everything a
    player touches is black on this screen whatever colour is behind it: the
    cards say so themselves (`tone="ink"` on every Panel in MenuScreen), and the
    home view's three buttons are the one control with no card around them, so
@@ -241,169 +241,6 @@ body {
   padding: calc(var(--cell) * 0.6) var(--cell) calc(var(--cell) * 0.8);
   /* The board owns the window; only the controls take clicks back. */
   pointer-events: none; /* 滑鼠事件「穿透」這一層，直接打到底下的 canvas */
-}
-
-/* The pop: the **title** jolts, and the ground changes colour under it.
-
-   The colour cut is instant - it is an inline custom property, and nothing here
-   transitions it - so on its own it would just be a page that is suddenly a
-   different colour. The jolt is what turns it into an event, and it is the one
-   word the page is named for that takes the hit: SNAKE punches out, rattles in
-   six hard steps and settles, while the ground behind it has already changed.
-   `steps(1, end)` is the same vocabulary the caret and `chroma-jolt` speak - a
-   smooth ease would read as a slide; this reads as a hit.
-
-   Only the title moves. The buttons, the lede and the cards below hold still,
-   so nothing a player is reading or typing into is ever in motion.
-
-   Percentages, not px: they are percentages of the title's own box, which is
-   already sized in `--cell`, so the jolt scales with the board on its own.
-
-   ⚠️ The two keyframe blocks are not a duplicate, they are the restart
-   mechanism. A CSS animation restarts when its `animation-name` changes, and
-   nothing else - re-rendering with the same name leaves the running animation
-   exactly where it was, so every switch after the first would land silently.
-   `data-pop` alternates a/b with every colour (see useMenuPop), which swaps the
-   name and starts it over. The usual alternative, `key` on the element to force
-   a remount, would throw away whatever the player had typed into the nickname
-   field. */
-.title[data-pop] {
-  animation: menu-pop-a 640ms steps(1, end) 1;
-}
-
-.title[data-pop="b"] {
-  animation-name: menu-pop-b;
-}
-
-/* The same hit, on the colour split rather than on the geometry.
-
-   The jolt and the aberration are one event, not two things that happen at the
-   same time: the word is knocked, and the three guns come apart because of it.
-   So this runs for exactly as long, on exactly the same steps, and lands the
-   channels back on `--split-base` at 100% - where `.chroma`'s own declaration
-   was already holding them, so nothing jumps when the animation is removed.
-
-   Multiples of `--split-base`, never absolute pixels: the resting split is
-   already a fraction of `--cell`, so the hit scales with the board like
-   everything else does. `steps(1, end)` is doing double duty here - a custom
-   property with no `@property` behind it animates discretely anyway, and this
-   is what makes the hold land on each keyframe's own value rather than halfway
-   between two of them.
-
-   The two names are the restart mechanism again. See above. */
-.title[data-pop] .chroma {
-  animation: chroma-hit-a 640ms steps(1, end) 1;
-}
-
-.title[data-pop="b"] .chroma {
-  animation-name: chroma-hit-b;
-}
-
-@keyframes chroma-hit-a {
-  0% {
-    --split: calc(var(--split-base) * 4);
-  }
-  14% {
-    --split: calc(var(--split-base) * 2.4);
-  }
-  30% {
-    --split: calc(var(--split-base) * 3.1);
-  }
-  48% {
-    --split: calc(var(--split-base) * 1.9);
-  }
-  66% {
-    --split: calc(var(--split-base) * 2.5);
-  }
-  84% {
-    --split: calc(var(--split-base) * 1.4);
-  }
-  100% {
-    --split: var(--split-base);
-  }
-}
-
-/* Character for character the same as chroma-hit-a. See above. */
-@keyframes chroma-hit-b {
-  0% {
-    --split: calc(var(--split-base) * 4);
-  }
-  14% {
-    --split: calc(var(--split-base) * 2.4);
-  }
-  30% {
-    --split: calc(var(--split-base) * 3.1);
-  }
-  48% {
-    --split: calc(var(--split-base) * 1.9);
-  }
-  66% {
-    --split: calc(var(--split-base) * 2.5);
-  }
-  84% {
-    --split: calc(var(--split-base) * 1.4);
-  }
-  100% {
-    --split: var(--split-base);
-  }
-}
-
-@keyframes menu-pop-a {
-  0% {
-    transform: scale(1.06);
-  }
-  14% {
-    transform: scale(0.975) translate(-0.9%, 0.6%);
-  }
-  30% {
-    transform: scale(1.03) translate(0.7%, -0.45%);
-  }
-  48% {
-    transform: scale(0.992) translate(-0.4%, 0.22%);
-  }
-  66% {
-    transform: scale(1.012) translate(0.22%, 0.16%);
-  }
-  84% {
-    transform: scale(0.997) translate(-0.1%, 0);
-  }
-  100% {
-    transform: none;
-  }
-}
-
-/* Character for character the same as menu-pop-a. See above. */
-@keyframes menu-pop-b {
-  0% {
-    transform: scale(1.06);
-  }
-  14% {
-    transform: scale(0.975) translate(-0.9%, 0.6%);
-  }
-  30% {
-    transform: scale(1.03) translate(0.7%, -0.45%);
-  }
-  48% {
-    transform: scale(0.992) translate(-0.4%, 0.22%);
-  }
-  66% {
-    transform: scale(1.012) translate(0.22%, 0.16%);
-  }
-  84% {
-    transform: scale(0.997) translate(-0.1%, 0);
-  }
-  100% {
-    transform: none;
-  }
-}
-
-/* The colour still changes - it is the screen, not motion for its own sake.
-   What goes is the thing that actually moves. */
-@media (prefers-reduced-motion: reduce) {
-  .title[data-pop],
-  .title[data-pop] .chroma {
-    animation: none;
-  }
 }
 
 .ui__gap {
@@ -677,9 +514,60 @@ body {
 
 .menu-creature {
   display: block;
-  width: max(72px, calc(var(--cell) * 5.4));
+  /* Twice the width the word it replaced occupied. A drawing needs the room
+     that type does not: at the old size the head read as an icon dropped above
+     the menu, and at this one it is the thing the page is, with the menu as its
+     caption. Still one number - it is in cells, so it scales with the board. */
+  width: max(144px, calc(var(--cell) * 10.8));
   height: auto;
   overflow: visible;
+}
+
+/* The caption under the mascot: the lede, the three buttons and the note.
+
+   One box rather than three siblings of the heading, because it is sized as one
+   thing. Every size in it is the interface's usual size times 0.8 - the same
+   `--cell` multiples written 0.8 smaller, not a `transform: scale`, which would
+   blur the pixel font and shrink the buttons' hit areas along with their looks.
+   Button padding and the drop shadow are already in `em`, so they follow the
+   font size down on their own.
+
+   The floors drop to 6px rather than scaling with the rest: 6px is where this
+   font stops being readable at all, and a floored size has already left the
+   proportion behind anyway.
+
+   `margin-top` holds it away from the head. The column is centred as a whole,
+   so pushing this down moves the pair down the screen together, which is the
+   point - the creature sits high and looks out over what it is introducing. */
+.home-below {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--cell) * 0.56); /* .screenful's 0.7, at 0.8 */
+  margin-top: calc(var(--cell) * 1.4);
+  width: 100%;
+}
+
+.home-below .lede {
+  font-size: max(6px, calc(var(--cell) * 0.304)); /* .lede's 0.38, at 0.8 */
+}
+
+.home-below .controls {
+  gap: calc(var(--cell) * 0.4); /* .controls' 0.5, at 0.8 */
+}
+
+.home-below .controls--stack {
+  /* The stack's own ceiling, at 0.8 too. Without this the buttons would keep
+     their full width while their type shrank inside them. */
+  max-width: calc(var(--cell) * 9.6);
+}
+
+.home-below .controls button {
+  font-size: max(6px, calc(var(--cell) * 0.248)); /* the button's 0.31, at 0.8 */
+}
+
+.home-below .field__note {
+  font-size: max(6px, calc(var(--cell) * 0.256)); /* .field__note's 0.32, at 0.8 */
 }
 
 /* Out of the picture, still in the accessibility tree. `clip` rather than
@@ -1149,9 +1037,11 @@ body {
      這是像素字型，半格的位移會讓邊緣糊掉，而糊掉的邊緣正是這個效果的全部。
      0.085 格在一般視窗下約等於 2px。超過 3px 就不再像鏡頭，只像壞掉。
 
-     休息時 --split 就是 --split-base。分成兩個變數，是因為選單標題被撞到的
-     那 640ms 要把 --split 拉開成基準的好幾倍再收回來（見 chroma-hit-*），
-     而 keyframe 裡沒辦法拿「--split 自己」當基準算倍數。 */
+     --split 永遠等於 --split-base。分成兩個變數，是因為 fallback 那一招
+     需要一個「只被宣告、不被使用」的名字：真正畫圖的是 --split，而要被
+     重複宣告兩次、讓不支援 round() 的瀏覽器退回去的是 --split-base。
+     （選單標題以前會在換色那 640ms 把 --split 拉開成基準的好幾倍再收回來，
+     那個效果連同標題本身已經拿掉了，見 components/ui/MenuCreature.tsx。） */
   --split-base: 2px;
   --split-base: max(1px, round(calc(var(--cell) * 0.085), 1px));
   --split: var(--split-base);
