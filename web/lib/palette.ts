@@ -91,27 +91,39 @@ export const PAPER = "#FFFFFF";
  * for a different job. Here the colour *is* the ground, and nothing has to be
  * told apart from anything.
  *
+ * Each entry owns three independent facts: the ground the screen stands on, the
+ * measured ink the type on that ground takes, and the colour the mascot wears
+ * in front of it. They do not derive from one another.
+ *
  * `ink` is measured, not guessed. Five of the six are bright enough to carry
  * black type (#FFE93D 17.0:1, #22DFF5 12.9:1, #3EE03E 11.9:1, #FF4A1F 6.2:1,
  * #FF0CBA 6.0:1); #4B2BEE is not (2.9:1 against black, 7.3:1 against white), so
  * it is the one that turns over. Retuning a hex here means re-checking its
  * pair - a menu colour is the ground a whole screen of type sits on, and there
  * is nothing else on that screen to fall back to.
+ *
+ * `creature` is borrowed from the Solo pair lineage: the head is a *flat shape*
+ * on the ground rather than type on it, so it is picked for contrast of hue
+ * against `bg` - the ground's own opposite, not its ink. Its eyes stay literal
+ * white in every pair, which is what keeps the face a face on all six.
+ * The exact six pairs are pinned by `test/palette.test.mjs`.
  */
 export interface MenuColor {
   /** Fills the stage. */
   bg: string;
+  /** Fills the favicon creature's head; its eyes remain literal white. */
+  creature: string;
   /** `"white"` only where the ground is too dark for black. */
   ink: "black" | "white";
 }
 
 export const MENU_COLORS: readonly MenuColor[] = [
-  { bg: "#22DFF5", ink: "black" },
-  { bg: "#4B2BEE", ink: "white" },
-  { bg: "#FF4A1F", ink: "black" },
-  { bg: "#3EE03E", ink: "black" },
-  { bg: "#FF0CBA", ink: "black" },
-  { bg: "#FFE93D", ink: "black" },
+  { bg: "#22DFF5", creature: "#FF4A1F", ink: "black" },
+  { bg: "#4B2BEE", creature: "#FFE93D", ink: "white" },
+  { bg: "#FF4A1F", creature: "#22DFF5", ink: "black" },
+  { bg: "#3EE03E", creature: "#FF1B5E", ink: "black" },
+  { bg: "#FF0CBA", creature: "#7BF53A", ink: "black" },
+  { bg: "#FFE93D", creature: "#4B2BEE", ink: "black" },
 ];
 
 /** The same out-of-range tolerance the two lists above get. */

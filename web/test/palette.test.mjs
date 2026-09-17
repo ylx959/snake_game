@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PAPER, PALETTES, PLAYER_COLORS } from "../lib/palette.ts";
+import { MENU_COLORS, PAPER, PALETTES, PLAYER_COLORS } from "../lib/palette.ts";
 
 /**
  * CIE Lab, so "are these two colours alike?" is asked the way an eye asks it.
@@ -116,4 +116,18 @@ test("the solo palette is untouched", () => {
   // pairs on its own apples.
   assert.equal(PALETTES.length, 8);
   assert.equal(PALETTES[0].bg, "#00D6F0");
+});
+
+test("each menu ground carries its approved Solo-style creature colour", () => {
+  assert.deepEqual(
+    MENU_COLORS.map(({ bg, creature }) => [bg, creature]),
+    [
+      ["#22DFF5", "#FF4A1F"],
+      ["#4B2BEE", "#FFE93D"],
+      ["#FF4A1F", "#22DFF5"],
+      ["#3EE03E", "#FF1B5E"],
+      ["#FF0CBA", "#7BF53A"],
+      ["#FFE93D", "#4B2BEE"],
+    ],
+  );
 });
