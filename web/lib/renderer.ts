@@ -282,7 +282,7 @@ export class Renderer {
    * distant opponent here as well would darken it twice over.
    *
    * The segment is exactly the one solo draws: the same hard square, the same
-   * black eyes. Only the fill differs, and only because five snakes have to be
+   * white eyes. Only the fill differs, and only because five snakes have to be
    * told apart. A shared board is meant to look like the game, not like a
    * different one.
    *
@@ -349,7 +349,19 @@ export class Renderer {
     this.fillCell(cell, fruit, SQUARE, FOOD_INSET);
   }
 
-  /** Two black bars on the head, so you can tell which end is which. */
+  /**
+   * Two white bars on the head, so you can tell which end is which - the same
+   * white the favicon creature's eyes wear, so the snake's head and the mascot
+   * are one drawing at two sizes.
+   *
+   * ⚠️ White does not read on every body it lands on. It is strong on the dark
+   * snakes and all but invisible on the lightest: against `#FFE93D` it is
+   * 1.24:1, `#22DFF5` 1.62:1 and `#3EE03E` 1.76:1, where black was 17.0, 12.9
+   * and 11.9. The eyes are decoration rather than a cue a player has to read -
+   * which end is the head is also the end that moves - so this is a look, not
+   * a legibility promise. Anything that ever *depends* on seeing them wants
+   * the pair chosen against the body, not a constant.
+   */
   private drawEyes(head: Cell, direction: Direction): void {
     const { ctx } = this;
     const [left, top, width, height] = this.bounds(head);
@@ -370,7 +382,7 @@ export class Renderer {
     const near = Math.round((0.5 - EYE_SPREAD) * across - barAcross / 2);
     const far = across - barAcross - near;
 
-    ctx.fillStyle = INK;
+    ctx.fillStyle = PAPER;
     for (const acrossPos of [near, far]) {
       const x = left + (horizontal ? alongPos : acrossPos);
       const y = top + (horizontal ? acrossPos : alongPos);

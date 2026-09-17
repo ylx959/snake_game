@@ -25,8 +25,9 @@ export const PALETTES: readonly Palette[] = [
 ];
 
 /**
- * Text, borders, eyes - and the apple. Black on every pair, exactly as in the
- * reference art.
+ * Text, borders - and the apple. Black on every pair, exactly as in the
+ * reference art. Not the eyes any more: those are `PAPER`, so a head matches
+ * the favicon's white capsules.
  *
  * The apple was going to wear the *next* pair's foreground, as a hint at the
  * world the next bite brings. The palette will not have it: consecutive pairs

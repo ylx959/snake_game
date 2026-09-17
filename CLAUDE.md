@@ -455,7 +455,7 @@ Rendering details that are load-bearing:
   The apple is black on it, like solo's.
 
 - **A shared board draws its snakes exactly as solo does**: same hard square,
-  same black eyes. Only the fill differs, and only because five snakes have to
+  same white eyes. Only the fill differs, and only because five snakes have to
   be told apart. A room is meant to look like the game, not like a different one.
 - **The body is square; only the two *ends* round** (`web/lib/snakeEnds.ts`).
   A body cell is still `fillRect` on whole-pixel edges that neighbours share
