@@ -131,11 +131,10 @@ Two places bend that rule, both deliberately:
   matter what the theme redefined `--ink` to.
 
   **The menu is a third theme, `data-theme="pop"`.** It is an attract screen:
-  `MENU_COLORS` in `web/lib/palette.ts` is six flat colours, `hooks/useMenuPop.ts`
-  steps through them on a 5.6s timer, and the `SNAKE` title takes the hit on
-  every step (`.title[data-pop]`). The server is not involved and never was — a
-  menu is not a run, so unlike solo's flip the colour reports nothing; it is
-  there so the title page is not still.
+  `MENU_COLORS` in `web/lib/palette.ts` is six flat colours and
+  `hooks/useMenuPop.ts` steps through them on a 5.6s timer. The server is not
+  involved and never was — a menu is not a run, so unlike solo's flip the colour
+  reports nothing; it is there so the title page is not still.
 
   **The pop is the ground alone; the interface on it is black.** Every card is
   `tone="ink"` and the home view's three buttons flip the same five tokens via
@@ -146,52 +145,82 @@ Two places bend that rule, both deliberately:
   a box, which is also why the hold is 5.6s rather than the 3.2s it started at. Both of those rules pin `--shadow` black: the ink pairing casts a
   *white* shadow because it normally sits on black (the Game Over card), and
   white on #FFE93D is a haze rather than a drop shadow. The type standing
-  directly on the ground — the title, the lede, the note — is the only thing
-  that takes the colour's own measured pair.
+  directly on the ground — the lede and the note — is the only thing that takes
+  the colour's own measured pair.
 
-  **The knock and the aberration are one event.** `menu-pop-*` rattles the
-  title's geometry and `chroma-hit-*` blows `ChromaticText`'s three channels
-  apart at the same moment, on the same six steps, over the same 640ms: the word
-  is struck, and the guns come apart *because* of it. That is why `.chroma`
-  carries `--split-base` as well as `--split` — the hit is written in multiples
-  of the resting split, and a keyframe cannot use `--split` as its own basis.
-  `chroma-hit-*` lands back on `--split-base` at 100%, which is exactly where
-  `.chroma`'s own declaration is already holding it, so removing the animation
-  changes nothing.
+  Two things about it are load-bearing:
 
-  Three things about it are load-bearing:
-
-  - **Only the title moves.** The buttons, the cards and the nickname field hold
-    still under every switch, which is why the timer needs no "pause while
-    typing" guard. Two earlier versions shook the menu content and then the
-    ground itself, and both did.
+  - **Nothing on the menu moves when the colour changes.** The buttons, the
+    cards and the nickname field hold still under every switch, which is why the
+    timer needs no "pause while typing" guard. Three earlier versions moved
+    something — the whole overlay, then the ground itself, then the `SNAKE`
+    title, which punched and rattled on every step (`menu-pop-*`) while
+    `chroma-hit-*` blew `ChromaticText`'s channels apart on the same 640ms. All
+    three are gone. What is alive on this screen now is the mascot, and it keeps
+    its own clock: see **The heading is a creature** below.
   - **Each colour carries its own `ink`, and it is measured.** Five of the six
     take black type; `#4B2BEE` is 2.9:1 against black and 7.3:1 against white,
     so it alone turns the pair over, via `data-ink="white"`. Retuning a hex here
-    means re-checking that pair. Since the cards and buttons went black the pair
-    governs the title, the lede and the note only — but those are type with
-    nothing behind them but the colour, so it is still measured, not guessed.
-    `MENU_COLORS` is its own list and not a second use of `PLAYER_COLORS`, which
-    is pinned by `test/palette.test.mjs` against a white board for a different
-    job.
-  - **The two `menu-pop-a`/`menu-pop-b` keyframe blocks are identical on
-    purpose.** A CSS animation restarts when its `animation-name` changes and at
-    no other moment, so re-rendering with one name would land the first jolt and
-    then nothing. `useMenuPop` alternates `beat` to swap the name. The obvious
-    alternative — `key` on the element to force a remount — would throw away
-    whatever the player had typed.
+    means re-checking that pair. Since the cards and buttons went black and the
+    heading became a picture, the pair governs the lede and the note only — but
+    those are type with nothing behind them but the colour, so it is still
+    measured, not guessed. `MENU_COLORS` is its own list and not a second use of
+    `PLAYER_COLORS`, which is pinned by `test/palette.test.mjs` against a white
+    board for a different job.
 
-  `--emboss` is black in this theme rather than `--fg`, and that is what keeps
-  the title readable. `ChromaticText` screens its three channels back to *white*
-  through the body of every glyph, and white on `#22DFF5` is 1.4:1; the black
-  offset shadow is the edge it reads against. It costs nothing on the two outer
-  channels — they are `mix-blend-mode: screen`, and screen with black is the
-  identity — so one clean shadow paints, not three.
+  `--emboss` is black in this theme rather than `--fg`, because it is the drop
+  shadow that type wears here and `--fg` would put a white shadow under white
+  type on `#4B2BEE`. It used to be black for a sharper reason — the title was
+  `ChromaticText`, whose three channels screen back to *white* through the body
+  of every glyph, and white on `#22DFF5` is 1.4:1, so the black offset was the
+  only edge it read against. That title is gone; the token stays black for the
+  plainer reason.
+
+  One consequence outlived the title: `.chroma` still carries `--split-base` as
+  well as `--split`, which used to be so `chroma-hit-*` could write the knock in
+  multiples of the resting split (a keyframe cannot use `--split` as its own
+  basis). Nothing animates it now, and the pair survives only as the
+  `round()` fallback idiom — one name declared twice so an unsupported line can
+  be thrown away.
 
   **The whole theme was deleted once, and putting it back is the reason this
   section is long.** "The interface should be black" was read as "the menu
   should be black", and the pop went with it. Black is the *controls*; the
   ground still pops.
+
+  **The heading is a creature, not a word.** The home view's `h1` holds the
+  favicon drawn large — one black rounded square, two white capsules — and it
+  watches the pointer: `web/lib/menuCreature.ts` is the whole model (normalize a
+  pointer position to a signed unit aim, ease it exponentially, project it onto
+  head and eye transforms, sample a blink from elapsed seconds), and
+  `web/components/ui/MenuCreature.tsx` owns the one thing that cannot be pure,
+  the `requestAnimationFrame` clock and the pointer listeners. Four rules in it:
+
+  - **The lib file has no React and no DOM in it**, like everything else in
+    `web/lib/`, so `test/menuCreature.test.mjs` pins the pose arithmetic without
+    a window.
+  - **The component holds the aim in refs, never in state.** A pointer move is
+    sixty events a second; through `useState` each one would re-render the whole
+    menu. Each frame writes `transform` straight onto three groups.
+  - **The eyes move twice as far as the head, and the head also tips.** They are
+    three readings of one eased number, so they cannot disagree about where the
+    creature is looking. Smoothing happens on the aim, before the projection.
+  - **The blink scales an inner group about `y=17.5` explicitly**, written
+    translate/scale/translate rather than left to `transform-origin`: SVG's
+    origin handling is where browsers still differ, and the default would shut
+    the eyes upward into the forehead.
+
+  Touch pointers are ignored (a lifted finger leaves no cursor to follow) and
+  `pointerleave` returns the *target* to neutral so the easing carries the gaze
+  back rather than snapping it. `approachCreatureAim` clamps `dt` at 64ms, which
+  is what keeps a backgrounded tab from snapping the head to the pointer on the
+  frame it is looked at again.
+
+  The mascot is sized at `--cell * 10.8` and the caption under it —
+  `.home-below`, holding the lede, the three buttons and the note — is the
+  interface's usual `--cell` multiples written at 0.8, plus a top margin holding
+  it away from the head. Sizes, not `transform: scale`: scaling would blur the
+  pixel font and shrink the buttons' hit areas along with their looks.
 
 - **Board size.** Solo is `DEFAULT_WIDTH` x `DEFAULT_HEIGHT` = 48x27 and a room
   is `MULTI_WIDTH` x `MULTI_HEIGHT` = 64x36 — both exactly 16:9, so switching
@@ -453,13 +482,15 @@ Rendering details that are load-bearing:
   the heading, never along it: a snake running down has its own body directly
   above its head, so "above the head" is on the body half the time.
 - **The RGB split is three colour channels screened together**
-  (`components/ui/ChromaticText.tsx`), used on the menu title and on the solo
-  Game Over score. Two details are load-bearing. It assumes a **dark ground** —
-  `screen` over a light background only lightens it, so the fringes wash out.
-  The Game Over card supplies one: it is `tone="ink"` for exactly this reason.
-  The menu used to supply one by being black and no longer does — see the menu
-  theme above for the black `--emboss` that replaced it. Moving it anywhere else
-  means checking what is behind it first.
+  (`components/ui/ChromaticText.tsx`), used on the solo Game Over score — and
+  only there, since the menu title became the mascot. Two details are
+  load-bearing. It assumes a **dark ground** — `screen` over a light background
+  only lightens it, so the fringes wash out. The Game Over card supplies one: it
+  is `tone="ink"` for exactly this reason. The menu was its other home and went
+  through both ways of failing to supply one — black at first, then one of six
+  flat colours leaning on a black `--emboss` for an edge — before the heading
+  stopped being type at all. Moving it anywhere else means checking what is
+  behind it first.
   And the word is in the DOM **once**: the element's own text is the green
   channel and `::before`/`::after` redraw it from `data-text`. An earlier
   version used three real spans with two `aria-hidden`, and the heading's
