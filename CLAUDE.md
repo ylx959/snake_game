@@ -200,7 +200,8 @@ Two places bend that rule, both deliberately:
   the app and no `.title` rule for one. It watches the pointer:
   `web/lib/menuCreature.ts` is the whole model (normalize a
   pointer position to a signed unit aim, ease it exponentially, project it onto
-  head and eye transforms, sample a blink from elapsed seconds), and
+  head and eye transforms, sample a blink from elapsed seconds, choose a face
+  and ease the eyes toward it), and
   `web/components/ui/MenuCreature.tsx` owns the one thing that cannot be pure,
   the `requestAnimationFrame` clock and the pointer listeners. Four rules in it:
 
@@ -217,6 +218,52 @@ Two places bend that rule, both deliberately:
     translate/scale/translate rather than left to `transform-origin`: SVG's
     origin handling is where browsers still differ, and the default would shut
     the eyes upward into the forehead.
+
+  **The eyes also carry a face, and it is three poses and a priority.**
+  `creatureExpressionAt(shaking, idleSeconds)` answers `angry > tired >
+  neutral`, and that is the whole rule — there is no state machine and nothing
+  to get out of step. Neutral is the authored `13x25` capsule; tired is `16x5`;
+  angry is `17x6` tilted `+24°` on the left and `-24°` on the right, mirrored so
+  both point at the nose. The three live in one catalogue in
+  `web/lib/menuCreature.ts` and `expressionPose()` hands back a **copy**, since
+  the component eases its own pose in place and would otherwise write over the
+  catalogue the next target is read from. Five things about it:
+
+  - **Angry is the *run*, not the press.** It is read off the same `shakingRef`
+    the colour change hangs on, so it lasts the complete 1.5s even if the
+    pointer was let go at 0.2s, and it is released on the very frame the body
+    comes to rest — the expression is sampled after the shake block for exactly
+    that reason. A press the shake guard refuses still counts as activity.
+  - **Tired is five seconds — `IDLE_TIRED_SECONDS` — with nothing moved,
+    pressed or typed, and the frame owns that clock.** A `pointermove`,
+    `pointerdown` or `keydown` only raises a flag; the next tick stamps the time
+    for it. There is no `setTimeout` and no interval here, for the same reason
+    the shake has none: a second clock would drift away from the frame that
+    draws the face.
+  - **The change of face eases exactly as the gaze does**, through
+    `approachExpressionPose`, so it runs at one speed on a 30Hz and a 144Hz
+    display, and a target that changes mid-transition is picked up from the
+    composite already on screen rather than from the pose it was heading for.
+  - **The corner radius is half the *shorter* side**, and it is
+    `eyeCornerRadius()` in the lib rather than a sum in the component, so it is
+    pinned by a test. Half the *height* is the trap: on the tall neutral eye SVG
+    clamps `rx` to half the width and leaves `ry` at half the height, and a
+    6.5/12.5 pair draws an **oval**. The eye is the favicon's rounded rectangle,
+    not an ellipse, and a neutral eye must come out byte-for-byte the `13x25
+    rx="6.5"` rect the SVG is authored with, or the menu moves on its first
+    frame.
+  - **Transform order, outermost first: body shake, gaze translation,
+    screen-vertical blink, then each eye's own geometry and tilt.** The
+    expression is innermost, so a tilted angry eye still blinks *straight down*
+    rather than along its own slant, and the gaze goes on tracking through
+    every face.
+
+  Reduced motion drops the shaking and keeps the faces: the movement is the
+  decoration, the expression is information. The propless loading mascot is
+  always neutral and gets no activity listeners at all — it cannot be
+  interacted with, so it has no idle to notice. The eyes are the same two
+  rectangles in every case; there is no second path, no CSS keyframe and no
+  alternative renderer to keep in agreement.
 
   **On the menu the creature is also the button that changes the colour.** One
   press runs one shake — `SHAKE_DURATION_SECONDS` is 1.5 — and the ground and

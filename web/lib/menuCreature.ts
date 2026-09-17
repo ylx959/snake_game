@@ -233,6 +233,19 @@ export function expressionPose(id: CreatureExpressionId): EyeExpressionPose {
   return { left: { ...pose.left }, right: { ...pose.right } };
 }
 
+/**
+ * The one corner radius an eye wears: half its *shorter* side, which is what
+ * makes every pose the favicon's rounded rectangle rather than an ellipse.
+ * Half the height is not the same rule - on the tall neutral eye SVG clamps
+ * `rx` to half the width and leaves `ry` at half the height, and a 6.5/12.5
+ * pair is an oval. Half the shorter side is never clamped on either axis, so
+ * the ends stay semicircular and the long sides stay straight, all the way
+ * through a squash from 13x25 to 16x5.
+ */
+export function eyeCornerRadius(eye: EyeShape): number {
+  return Math.min(eye.width, eye.height) / 2;
+}
+
 const approachEyeShape = (current: EyeShape, target: EyeShape, mix: number): EyeShape => ({
   width: current.width + (target.width - current.width) * mix,
   height: current.height + (target.height - current.height) * mix,

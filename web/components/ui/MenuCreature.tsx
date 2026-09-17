@@ -11,20 +11,61 @@
  * shake moves, and the inner groups are the gaze and the blink, which go on
  * running untouched through it. The loading screen renders the same component
  * with no props and gets the old non-interactive mascot.
+ *
+ * The face is the third thing that clock drives. Angry is read off `shakingRef`
+ * rather than off the pointer, so it lasts the whole run even if the press was
+ * let go early; tired arrives after five seconds in which nothing was moved,
+ * pressed or typed. Activity is *timestamped by the frame*, never by a timeout:
+ * an event only raises a flag and the next tick decides what time it was. The
+ * propless loading mascot is always neutral - nothing on that screen is idle,
+ * because nothing on it can be interacted with.
+ *
+ * Order of transforms, outermost first: body shake, gaze translation,
+ * screen-vertical blink, and then each eye's own expression geometry and tilt.
+ * The expression sits innermost so a tilted eye still blinks straight down.
  */
 
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 
 import {
   approachCreatureAim,
+  approachExpressionPose,
   blinkScaleAt,
+  creatureExpressionAt,
   creaturePose,
+  expressionPose,
+  eyeCornerRadius,
   neutralAim,
   normalizeCreatureAim,
   shakeCompleteAt,
   shakePoseAt,
   type CreatureAim,
+  type EyeShape,
 } from "@/lib/menuCreature";
+
+/** Where the two eyes sit in the 54-unit box: the authored rects' centres. */
+const EYE_CENTER_Y = 17.5;
+const LEFT_EYE_CENTER_X = 15.5;
+const RIGHT_EYE_CENTER_X = 38.5;
+
+/**
+ * The one thing that writes SVG: the library hands back numbers and this turns
+ * them into attributes. Sized about the eye's fixed centre so a squashing eye
+ * settles rather than slides, and the radius is the library's, so a neutral eye
+ * is byte-for-byte the rect the favicon is authored with.
+ */
+function drawEye(node: SVGRectElement | null, shape: EyeShape, centerX: number) {
+  if (!node) return;
+  node.setAttribute("x", String(centerX - shape.width / 2));
+  node.setAttribute("y", String(EYE_CENTER_Y - shape.height / 2));
+  node.setAttribute("width", String(shape.width));
+  node.setAttribute("height", String(shape.height));
+  node.setAttribute("rx", String(eyeCornerRadius(shape)));
+  node.setAttribute(
+    "transform",
+    `rotate(${shape.rotation} ${centerX} ${EYE_CENTER_Y})`,
+  );
+}
 
 /**
  * Both props or neither: a coloured head that reports its shake is the menu,
@@ -65,8 +106,20 @@ export function MenuCreature({ color, onShakeComplete }: MenuCreatureProps = {})
   /** Where the creature is actually looking. Eased toward the target. */
   const currentRef = useRef<CreatureAim>(neutralAim());
 
+  const leftEyeRef = useRef<SVGRectElement>(null);
+  const rightEyeRef = useRef<SVGRectElement>(null);
+  /** The face on screen right now - a composite, not one of the three poses. */
+  const currentExpressionRef = useRef(expressionPose("neutral"));
+  /** Raised by an event, cleared by the frame that stamps the time for it. */
+  const activityRequestedRef = useRef(false);
+  const lastActivityRef = useRef<number | null>(null);
+
   const startShake = () => {
     if (!interactive) return;
+    // Before both guards: a press that the shake ignores is still activity, so
+    // pointer, touch, keyboard and assistive-technology activation all wake the
+    // face even when the run they asked for is refused.
+    activityRequestedRef.current = true;
     // Idempotent: presses during a run are ignored rather than queued, so the
     // colour can never skip an entry or restart the shake half way.
     if (shakingRef.current) return;
@@ -96,7 +149,12 @@ export function MenuCreature({ color, onShakeComplete }: MenuCreatureProps = {})
     let started = 0;
     let previous = 0;
 
+    const onActivity = () => {
+      activityRequestedRef.current = true;
+    };
+
     const onPointerMove = (event: PointerEvent) => {
+      if (interactive) activityRequestedRef.current = true;
       // A lifted finger leaves no cursor, so following one freezes the gaze.
       if (event.pointerType === "touch") return;
       const box = svgRef.current?.getBoundingClientRect();
@@ -124,6 +182,13 @@ export function MenuCreature({ color, onShakeComplete }: MenuCreatureProps = {})
       // The first frame has nothing to measure against: it only sets the baseline.
       const dt = previous === 0 ? 0 : (now - previous) / 1000;
       previous = now;
+
+      // The frame owns the clock; an event only says "something happened".
+      if (lastActivityRef.current === null) lastActivityRef.current = now;
+      if (activityRequestedRef.current) {
+        lastActivityRef.current = now;
+        activityRequestedRef.current = false;
+      }
       currentRef.current = approachCreatureAim(currentRef.current, targetRef.current, dt);
       const pose = creaturePose(currentRef.current);
       headRef.current?.setAttribute(
@@ -164,11 +229,30 @@ export function MenuCreature({ color, onShakeComplete }: MenuCreatureProps = {})
         }
       }
 
+      // After the shake block, so the frame that ends a run is already calm:
+      // angry is released on the same frame the body comes to rest.
+      const lastActivity = lastActivityRef.current ?? now;
+      const expressionId = interactive
+        ? creatureExpressionAt(shakingRef.current, (now - lastActivity) / 1000)
+        : "neutral";
+      currentExpressionRef.current = approachExpressionPose(
+        currentExpressionRef.current,
+        expressionPose(expressionId),
+        dt,
+      );
+      drawEye(leftEyeRef.current, currentExpressionRef.current.left, LEFT_EYE_CENTER_X);
+      drawEye(rightEyeRef.current, currentExpressionRef.current.right, RIGHT_EYE_CENTER_X);
+
       frame = requestAnimationFrame(tick);
     };
 
     window.addEventListener("pointermove", onPointerMove);
     document.addEventListener("pointerleave", onPointerLeave);
+    // Only the menu has an idle to notice: the loading mascot never tires.
+    if (interactive) {
+      window.addEventListener("pointerdown", onActivity);
+      window.addEventListener("keydown", onActivity);
+    }
     frame = requestAnimationFrame(tick);
     // An orphaned rAF writing to a detached node runs for the life of the page.
     // The run is torn down with it: an unmounted creature must not report a
@@ -180,8 +264,12 @@ export function MenuCreature({ color, onShakeComplete }: MenuCreatureProps = {})
       cancelAnimationFrame(frame);
       window.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerleave", onPointerLeave);
+      if (interactive) {
+        window.removeEventListener("pointerdown", onActivity);
+        window.removeEventListener("keydown", onActivity);
+      }
     };
-  }, []);
+  }, [interactive]);
 
   const creature = (
     <svg
@@ -205,7 +293,10 @@ export function MenuCreature({ color, onShakeComplete }: MenuCreatureProps = {})
           <rect width="54" height="54" rx="10" fill={color ?? "var(--creature-head)"} />
           <g ref={eyesRef}>
             <g ref={blinkRef}>
+              {/* Authored neutral, for the server render and the first client
+                  frame; every pose after that is written by the frame loop. */}
               <rect
+                ref={leftEyeRef}
                 x="9"
                 y="5"
                 width="13"
@@ -214,6 +305,7 @@ export function MenuCreature({ color, onShakeComplete }: MenuCreatureProps = {})
                 fill={interactive ? "#FFFFFF" : "var(--creature-eye)"}
               />
               <rect
+                ref={rightEyeRef}
                 x="32"
                 y="5"
                 width="13"

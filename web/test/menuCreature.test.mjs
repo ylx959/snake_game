@@ -8,6 +8,7 @@ import {
   creatureExpressionAt,
   creaturePose,
   expressionPose,
+  eyeCornerRadius,
   IDLE_TIRED_SECONDS,
   SHAKE_DURATION_SECONDS,
   shakeCompleteAt,
@@ -172,4 +173,25 @@ test("every expression stays inside the head at full gaze travel", () => {
   const angry = expressionPose("angry");
   assert.ok(angry.left.width / angry.left.height > 1.7);
   assert.equal(angry.left.rotation, -angry.right.rotation);
+});
+
+test("an eye is the favicon's rounded rectangle, never an ellipse", () => {
+  // Exactly the rx the two rects are authored with: neutral must render as the
+  // attributes it was written with, or the menu's first frame moves.
+  assert.equal(eyeCornerRadius(expressionPose("neutral").left), 6.5);
+  assert.equal(eyeCornerRadius(expressionPose("tired").left), 2.5);
+  assert.equal(eyeCornerRadius(expressionPose("angry").left), 3);
+});
+
+test("the radius never exceeds half of either side, at any point of a squash", () => {
+  let pose = expressionPose("neutral");
+  const target = expressionPose("tired");
+  for (let frame = 0; frame < 120; frame += 1) {
+    pose = approachExpressionPose(pose, target, 1 / 60);
+    for (const eye of [pose.left, pose.right]) {
+      const radius = eyeCornerRadius(eye);
+      assert.ok(radius <= eye.width / 2 + 1e-12);
+      assert.ok(radius <= eye.height / 2 + 1e-12);
+    }
+  }
 });
