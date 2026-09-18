@@ -443,9 +443,9 @@ body {
   overflow: visible;
 }
 
-/* The mascot as a control: a reset, a cursor and a focus ring, nothing that
-   moves - the shake is sampled in lib/menuCreature.ts onto the SVG, so nothing
-   here can disagree. The cursor stays `pointer`: a shake answers, it is no wait. */
+/* The mascot as a control: a reset and a cursor, nothing that moves - the shake
+   is sampled in lib/menuCreature.ts onto the SVG, so nothing here can disagree.
+   The cursor stays `pointer`: a shake answers, it is no wait. */
 .menu-creature-button {
   display: block;
   padding: 0;
@@ -457,9 +457,10 @@ body {
   cursor: pointer;
 }
 
+/* No ring, like every other button here: the creature answers a press by
+   shaking, which says it was pressed more plainly than an outline would. */
 .menu-creature-button:focus-visible {
-  outline: max(2px, calc(var(--cell) * 0.1)) solid var(--ink);
-  outline-offset: max(4px, calc(var(--cell) * 0.2));
+  outline: none;
 }
 
 /* The caption, sized as one thing: every size is the usual `--cell` multiple
