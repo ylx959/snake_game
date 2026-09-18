@@ -14,7 +14,7 @@ sent and forwards key presses, and holds no game logic of its own.
 - **Group**: up to five snakes on a shared 64x36 board, joined by a six-character room code, one clock, last one standing
 - A spotlight on the head: the board fades to near black eight cells out, and in a room an opponent past five cells is not drawn at all
 - Full-bleed canvas letterboxed to 16:9 at any window size, cycling palettes on a solo run and fixed white in a room
-- **A mascot on the menu that watches your cursor**, blinks, gets bored after five seconds and loses its temper when you tap it — written as **maths, not a motion library**. There is no animation package in `package.json`: the gaze is exponential easing, `1 - e^(-rate·dt)`, which composes, so it runs at one speed on a 30Hz screen and a 144Hz one; the shake is a sine wave under a half-sine envelope, so the body leaves and returns to rest with no jump at either end; the blink is a triangle that lands back on exactly 1. `web/lib/menuCreature.ts` is pure functions with no React and no DOM in it, so every pose is unit tested without a browser.
+- **A mascot on the menu that watches your cursor**, blinks, gets bored and loses its temper when you tap it — adapted from Jeremy's open source [bloub](https://github.com/jeremy-prt/bloub). Redrawn here as maths rather than a motion library: `web/lib/menuCreature.ts` is pure functions, unit tested without a browser.
 
 ## Built with
 
