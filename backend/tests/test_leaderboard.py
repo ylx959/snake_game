@@ -6,6 +6,7 @@ development file and never needs cleaning up after itself.
 
 import pytest
 
+import leaderboard.repository as repository_module
 from leaderboard.repository import (
     MAX_SCORE,
     MIN_RECORDED_SCORE,
@@ -272,9 +273,26 @@ def test_a_reopened_file_still_has_its_scores(tmp_path):
     second.close()
 
 
-def test_postgres_is_an_honest_refusal_not_a_silent_sqlite_file():
-    with pytest.raises(NotImplementedError):
-        repository_from_env("postgresql://user@host/db")
+@pytest.mark.parametrize("scheme", ["postgres", "postgresql"])
+def test_a_postgres_url_selects_the_postgres_store_without_connecting(monkeypatch, scheme):
+    constructed = []
+
+    class StubPostgresLeaderboardRepository:
+        def __init__(self, url):
+            self.url = url
+            constructed.append(self)
+
+    monkeypatch.setattr(
+        repository_module,
+        "PostgresLeaderboardRepository",
+        StubPostgresLeaderboardRepository,
+    )
+    url = f"{scheme}://user@host/db"
+
+    repository = repository_module.repository_from_env(url)
+
+    assert repository is constructed[0]
+    assert repository.url == url
 
 
 def test_an_unknown_scheme_is_refused():
