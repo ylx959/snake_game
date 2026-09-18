@@ -1,7 +1,7 @@
 """Storing and reading solo scores.
 
 `LeaderboardRepository` is the seam. Everything above it - the session handler,
-the protocol - depends on the four methods in the Protocol below and on nothing
+the protocol - depends on the five methods in the Protocol below and on nothing
 about SQL, so moving from the development SQLite file to a deployed Postgres is
 a new class here and an environment variable, not a change anywhere else.
 
@@ -284,33 +284,6 @@ class SqliteLeaderboardRepository:
         self._connection.close()
 
 
-def repository_from_env(url: str | None = None) -> LeaderboardRepository:
-    """Build the store the environment asks for.
-
-    `DATABASE_URL` is the whole configuration surface, so deployment is one
-    variable rather than a code change:
-
-        sqlite:///./leaderboard.db      a file, the default
-        sqlite:///:memory:             nothing survives the process
-        postgresql://user@host/db      PostgreSQL production database
-
-    Postgres is deliberately a clear failure rather than a silent fall back to
-    a local file: a deployed server quietly writing its scoreboard to a
-    container's disk looks exactly like a working one until it restarts.
-    """
-    url = url or os.environ.get("DATABASE_URL") or DEFAULT_DATABASE_URL
-
-    if url.startswith("sqlite://"):
-        path = url[len("sqlite://") :]
-        # sqlite:///relative -> ./relative ; sqlite:///:memory: -> :memory:
-        path = path.lstrip("/") if not path.startswith("//") else path[1:]
-        return SqliteLeaderboardRepository(path or ":memory:")
-
-    if url.startswith(("postgres://", "postgresql://")):
-        return PostgresLeaderboardRepository(url)
-
-    raise ValueError("unsupported DATABASE_URL scheme")
-
 class PostgresLeaderboardRepository:
     """The production leaderboard store backed by PostgreSQL."""
 
@@ -431,3 +404,31 @@ class PostgresLeaderboardRepository:
     def close(self) -> None:
         """Close every database connection during application shutdown."""
         self._pool.close()
+
+
+def repository_from_env(url: str | None = None) -> LeaderboardRepository:
+    """Build the store the environment asks for.
+
+    `DATABASE_URL` is the whole configuration surface, so deployment is one
+    variable rather than a code change:
+
+        sqlite:///./leaderboard.db      a file, the default
+        sqlite:///:memory:             nothing survives the process
+        postgresql://user@host/db      PostgreSQL production database
+
+    PostgreSQL URLs select the deployed store. Unknown schemes fail explicitly
+    instead of silently falling back to a local SQLite file, because a deployed
+    server writing to its container disk only looks durable until it restarts.
+    """
+    url = url or os.environ.get("DATABASE_URL") or DEFAULT_DATABASE_URL
+
+    if url.startswith("sqlite://"):
+        path = url[len("sqlite://") :]
+        # sqlite:///relative -> ./relative ; sqlite:///:memory: -> :memory:
+        path = path.lstrip("/") if not path.startswith("//") else path[1:]
+        return SqliteLeaderboardRepository(path or ":memory:")
+
+    if url.startswith(("postgres://", "postgresql://")):
+        return PostgresLeaderboardRepository(url)
+
+    raise ValueError("unsupported DATABASE_URL scheme")
