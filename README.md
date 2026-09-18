@@ -67,7 +67,10 @@ NEXT_PUBLIC_WS_URL=ws://127.0.0.1:8000/ws
 
 Without it the client falls back to the same address.
 
-**Back end.** One variable, `DATABASE_URL`, from `backend/.env.example`:
+**Back end.** One variable, `DATABASE_URL`, read from the environment.
+`./dev.sh` passes `backend/.env` to uvicorn's `--env-file` when that file
+exists, so a local value goes there; it is gitignored. `.venv/bin/python
+main.py` reads only a real environment variable.
 
 ```text
 sqlite:///./leaderboard.db    a local file — the default, created on first run
@@ -243,7 +246,6 @@ Three things bend that rule, all appearance rather than rules:
 │   ├── dev.sh                  # uvicorn --reload on 127.0.0.1
 │   ├── pyproject.toml          # where the pytest markers are registered
 │   ├── requirements.txt        # five pinned dependencies
-│   ├── .env.example            # DATABASE_URL
 │   ├── game/                   # rules. No sockets, no asyncio, no rooms.
 │   │   ├── game.py             # solo: the tick, food, score, status, palette
 │   │   ├── multiplayer.py      # several snakes on one board, in lockstep
