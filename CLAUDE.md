@@ -350,8 +350,9 @@ Two places bend that rule, both deliberately:
 
 ### backend
 
-FastAPI + uvicorn, four dependencies pinned in `requirements.txt`, plus SQLite
-from the standard library. There is no packaging step; `tests/conftest.py` puts
+FastAPI + uvicorn, five dependencies pinned in `requirements.txt`: SQLite from
+the standard library for local storage, plus Psycopg and its pool extra for
+deployed PostgreSQL. There is no packaging step; `tests/conftest.py` puts
 the backend root on `sys.path`.
 
 Layered so that each layer knows strictly less than the one above:

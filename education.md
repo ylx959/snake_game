@@ -16,7 +16,7 @@
 
 這是一個 server-authoritative（伺服器權威）的即時遊戲：
 
-- 單人模式：48 × 27 棋盤、暫停與重置、配色循環、SQLite 排行榜。
+- 單人模式：48 × 27 棋盤、暫停與重置、配色循環、持久化排行榜。
 - 多人模式：2–5 人、房間碼、房主開局、同步倒數、64 × 36 共用棋盤、存活排名。
 - 後端：Python、FastAPI、WebSocket、asyncio、pytest。
 - 前端：Next.js、React、TypeScript、Canvas 2D。
@@ -221,7 +221,7 @@ head → [(8, 5), (7, 5), (6, 5)] ← tail
 
 `GameRoom` 本身是同步物件；真正的等待只集中在 `backend/room/clock.py`。一個房間一個 clock task，依序完成倒數、開始遊戲、固定間隔 tick、廣播狀態與結果。
 
-在單一 asyncio event loop 中，沒有 `await` 的同步規則區段不會被其他 coroutine 插入，因此核心遊戲不需要執行緒鎖。耗時的 SQLite 操作則應移到 worker thread，避免阻塞所有房間的時鐘。
+在單一 asyncio event loop 中，沒有 `await` 的同步規則區段不會被其他 coroutine 插入，因此核心遊戲不需要執行緒鎖。耗時的同步資料庫操作則應移到 worker thread，避免阻塞所有房間的時鐘。
 
 房間狀態只存在記憶體：最後一人離開便移除，閒置等待中的房間也會過期。排行榜才是需要持久化的資料。
 
@@ -303,7 +303,7 @@ WebSocket 斷線後會嘗試重連，但原本的 run 或房間歸伺服器所�
 
 ## 重點八：持久化邊界
 
-只有單人排行榜會寫入資料庫。`backend/leaderboard/repository.py` 用 `LeaderboardRepository` Protocol 隔離儲存實作，現在提供 SQLite；若要加入 PostgreSQL，應新增 repository 實作，而不是改動遊戲或 WebSocket 協定。
+只有單人排行榜會寫入資料庫。`backend/leaderboard/repository.py` 用 `LeaderboardRepository` Protocol 隔離儲存實作：本機預設使用 SQLite，部署環境可透過 `DATABASE_URL` 使用 PostgreSQL。遊戲與 WebSocket 協定不需要知道實際資料庫種類。
 
 排行榜的規則包括：
 

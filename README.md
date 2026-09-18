@@ -20,7 +20,8 @@ sent and forwards key presses, and holds no game logic of its own.
 ## Built with
 
 - [Python](https://www.python.org/) 3.11+, [FastAPI](https://fastapi.tiangolo.com/), [uvicorn](https://www.uvicorn.org/)
-- [pytest](https://docs.pytest.org/), and SQLite from the standard library
+- [pytest](https://docs.pytest.org/), SQLite from the standard library locally, and
+  [Psycopg](https://www.psycopg.org/) 3 over PostgreSQL for deployed persistence
 - [Next.js](https://nextjs.org/) 16 App Router, [React](https://react.dev/) 19
 - [TypeScript](https://www.typescriptlang.org/), Canvas 2D, hand-written CSS
 
@@ -28,7 +29,7 @@ sent and forwards key presses, and holds no game logic of its own.
 
 Both servers must run. Use two terminals.
 
-Backend — Python 3.11+, four pinned dependencies:
+Backend — Python 3.11+, five pinned dependencies:
 
 ```bash
 cd backend
@@ -67,20 +68,19 @@ Without it the client falls back to the same address.
 **Back end.** One variable, `DATABASE_URL`, from `backend/.env.example`:
 
 ```text
-sqlite:///./leaderboard.db    a file — the default, created on first run
+sqlite:///./leaderboard.db    a local file — the default, created on first run
 sqlite:///:memory:            nothing survives the process
-postgresql://user@host/db     raises; see below
+postgresql://user@host/db     a deployed PostgreSQL database
 ```
 
 - Rooms are not configured because rooms are not stored: they live in memory and
   are worth nothing once everyone leaves.
 - The leaderboard is the only durable state, behind a `LeaderboardRepository`
   Protocol (`backend/leaderboard/repository.py`); `repository_from_env()`
-  dispatches on the URL scheme.
-- Postgres is a new class with four methods and one branch there. Until it
-  exists a `postgresql://` URL **raises on startup** — a deployed server quietly
-  writing its scoreboard to a container's disk looks like a working one until it
-  restarts.
+  selects SQLite or PostgreSQL from the URL scheme.
+- SQLite remains the zero-setup local default. Deployments set `DATABASE_URL`
+  to a secret PostgreSQL connection string; unsupported schemes fail at startup
+  instead of silently writing to an ephemeral container file.
 
 ## Playing
 
@@ -255,7 +255,7 @@ Three things bend that rule, all appearance rather than rules:
 │   │   ├── codes.py            # six characters, no look-alikes
 │   │   └── nickname.py         # validation
 │   ├── leaderboard/
-│   │   └── repository.py       # the Protocol, and the SQLite implementation
+│   │   └── repository.py       # the Protocol, SQLite/PostgreSQL stores, and URL factory
 │   └── tests/                  # pytest, one file per marker group
 ├── web/                        # Next.js front end
 │   ├── app/
