@@ -13,9 +13,8 @@ sent and forwards key presses, and holds no game logic of its own.
 - **Solo**: one snake on 48x27, with a leaderboard the server writes itself
 - **Group**: up to five snakes on a shared 64x36 board, joined by a six-character room code, one clock, last one standing
 - A spotlight on the head: the board fades to near black eight cells out, and in a room an opponent past five cells is not drawn at all
-- Every death on a shared board decided before any snake moves, so message order cannot matter
 - Full-bleed canvas letterboxed to 16:9 at any window size, cycling palettes on a solo run and fixed white in a room
-- 346 backend tests grouped by marker, covering the rules without a socket or an event loop
+- **A mascot on the menu that watches your cursor**, blinks, gets bored after five seconds and loses its temper when you tap it — written as **maths, not a motion library**. There is no animation package in `package.json`: the gaze is exponential easing, `1 - e^(-rate·dt)`, which composes, so it runs at one speed on a 30Hz screen and a 144Hz one; the shake is a sine wave under a half-sine envelope, so the body leaves and returns to rest with no jump at either end; the blink is a triangle that lands back on exactly 1. `web/lib/menuCreature.ts` is pure functions with no React and no DOM in it, so every pose is unit tested without a browser.
 
 ## Built with
 
@@ -24,6 +23,9 @@ sent and forwards key presses, and holds no game logic of its own.
   [Psycopg](https://www.psycopg.org/) 3 over PostgreSQL for deployed persistence
 - [Next.js](https://nextjs.org/) 16 App Router, [React](https://react.dev/) 19
 - [TypeScript](https://www.typescriptlang.org/), Canvas 2D, hand-written CSS
+- Deployed on [Vercel](https://vercel.com/) (front end) and
+  [Render](https://render.com/) (game server), with the leaderboard on
+  [Supabase](https://supabase.com/) PostgreSQL
 
 ## Local Development
 
@@ -239,6 +241,8 @@ Three things bend that rule, all appearance rather than rules:
 │   ├── protocol.py             # every message, in and out. No side effects.
 │   ├── transport.py            # the socket end of a player's outbox
 │   ├── dev.sh                  # uvicorn --reload on 127.0.0.1
+│   ├── pyproject.toml          # where the pytest markers are registered
+│   ├── requirements.txt        # five pinned dependencies
 │   ├── .env.example            # DATABASE_URL
 │   ├── game/                   # rules. No sockets, no asyncio, no rooms.
 │   │   ├── game.py             # solo: the tick, food, score, status, palette
@@ -261,40 +265,39 @@ Three things bend that rule, all appearance rather than rules:
 │   ├── app/
 │   │   ├── page.tsx            # the stage, and which screen is on it
 │   │   ├── layout.tsx          # the pixel font
+│   │   ├── icon.svg            # the favicon the mascot is drawn from
 │   │   └── globals.css         # the stage and the screens, sized in cells
 │   ├── components/
 │   │   ├── game/               # the canvas, the readouts, the name tag
 │   │   ├── screens/            # loading, menu, lobby, round, results
-│   │   └── ui/                 # the panel, the RGB-split text, the fields
+│   │   └── ui/                 # the panel, the mascot, the fields
 │   ├── hooks/
 │   │   ├── useGameSession.ts   # the only React <-> socket seam
-│   │   └── useBoardRect.ts     # measures the window
+│   │   ├── useBoardRect.ts     # measures the window
+│   │   └── useMenuPop.ts       # the menu colour index, advanced by the mascot
 │   ├── lib/                    # no React imported anywhere below here
 │   │   ├── websocket.ts        # the WebSocket client
 │   │   ├── input.ts            # keys -> commands, by key position
 │   │   ├── renderer.ts         # canvas drawing, stateless per frame
+│   │   ├── snakeEnds.ts        # which corners of a head or tail round
 │   │   ├── vision.ts           # the spotlight, and what is drawn at all
 │   │   ├── palette.ts          # the colour pairs, and the player colours
+│   │   ├── playout.ts          # one frame a beat, so jitter is not the timing
+│   │   ├── netstats.ts         # the gaps between arrivals and paints
+│   │   ├── menuCreature.ts     # the mascot's maths: gaze, blink, shake, face
 │   │   ├── nickname.ts         # the same rule as the server, run early
 │   │   └── board.ts            # where the board sits, and how big
-│   ├── test/                   # node --test: board, palette, vision
+│   ├── test/                   # node --test over the lib maths, no browser
 │   ├── types/game.ts           # the wire contract, client side
+│   ├── .env.local.example      # NEXT_PUBLIC_WS_URL
 │   └── next.config.ts          # dev origins and dev indicators
 ├── docs/protocol.md            # every message, limit and error code
-├── CLAUDE.md                   # working notes on the load-bearing details         
+├── CLAUDE.md                   # working notes on the load-bearing details
+├── education.md                # a teaching guide to this code, in Chinese
 └── LICENSE                     # MIT
 ```
 
-## Controls
 
-```text
-Arrows / WASD   steer, and start a solo run
-Space           pause and resume            (solo)
-R               reset                       (solo)
-```
-
-Both do nothing while a text field has focus, and nothing in a room — a round
-belongs to everyone in it, so no one player can pause it.
 
 ## Privacy
 
