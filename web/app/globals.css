@@ -915,3 +915,10 @@ body {
   width: 100%;
   max-width: calc(var(--cell) * 10.8);
 }
+
+/*selection*/
+
+::selection{
+  color:white;
+}
+
