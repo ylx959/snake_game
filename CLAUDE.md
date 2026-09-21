@@ -815,7 +815,12 @@ run had already started under the old name.
 
 Rooms live in memory and are not persisted; a room is worth nothing once
 everyone has left. The leaderboard is the only durable state, behind the
-`LeaderboardRepository` Protocol, configured by `DATABASE_URL` alone.
+`LeaderboardRepository` Protocol, configured by `DATABASE_URL` for where it lives and
+`LEADERBOARD_REMOTE` for whether a remote one is honoured at all: a PostgreSQL
+URL is ignored without the opt-in, so a local run cannot write a practice score
+into the table real players are ranked in - nor spend a real nickname on it.
+A deployment must set it; the default is the safe one because a forgotten
+variable should cost durability, which is loud, not a place, which is silent.
 
 **There is no client message that carries a score.** The only route into the
 leaderboard is a finished, server-run solo game — and it writes nothing at all

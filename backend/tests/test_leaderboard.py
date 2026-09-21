@@ -10,6 +10,7 @@ import leaderboard.repository as repository_module
 from leaderboard.repository import (
     MAX_SCORE,
     MIN_RECORDED_SCORE,
+    REMOTE_ENV_VAR,
     TOP_LIMIT,
     TOP_VISIBLE,
     SqliteLeaderboardRepository,
@@ -298,6 +299,110 @@ def test_a_postgres_url_selects_the_postgres_store_without_connecting(monkeypatc
 def test_an_unknown_scheme_is_refused():
     with pytest.raises(ValueError):
         repository_from_env("mysql://user@host/db")
+
+
+# --- the remote opt-in ----------------------------------------------------
+#
+# `.env` holds the deployed URL permanently, so "which database" and "am I
+# playing for real" are two questions. These pin the second one.
+
+
+@pytest.fixture
+def local_only(monkeypatch, tmp_path):
+    """An environment with no opt-in, and a cwd the fallback file can land in."""
+    monkeypatch.delenv(REMOTE_ENV_VAR, raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+def _stub_postgres(monkeypatch):
+    constructed = []
+
+    class StubPostgresLeaderboardRepository:
+        def __init__(self, url):
+            self.url = url
+            constructed.append(self)
+
+    monkeypatch.setattr(
+        repository_module,
+        "PostgresLeaderboardRepository",
+        StubPostgresLeaderboardRepository,
+    )
+    return constructed
+
+
+def test_a_remote_url_alone_does_not_reach_the_remote_store(monkeypatch, local_only):
+    """The whole point: a local run cannot dirty the shared board by accident."""
+    constructed = _stub_postgres(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user@host/db")
+
+    repository = repository_from_env()
+
+    assert constructed == []
+    assert isinstance(repository, SqliteLeaderboardRepository)
+    repository.close()
+
+
+def test_the_local_fallback_is_the_default_file(monkeypatch, local_only):
+    _stub_postgres(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user@host/db")
+
+    repository = repository_from_env()
+    repository.record("ylx", 7)
+    repository.close()
+
+    assert (local_only / "leaderboard.db").exists()
+
+
+def test_the_swap_announces_itself(monkeypatch, local_only, capsys):
+    """Silently becoming a different database is the failure being avoided."""
+    _stub_postgres(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user@host/db")
+
+    repository_from_env().close()
+
+    assert REMOTE_ENV_VAR in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "on"])
+def test_the_opt_in_honours_a_remote_url(monkeypatch, local_only, value):
+    constructed = _stub_postgres(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user@host/db")
+    monkeypatch.setenv(REMOTE_ENV_VAR, value)
+
+    repository = repository_from_env()
+
+    assert repository is constructed[0]
+    assert repository.url == "postgresql://user@host/db"
+
+
+@pytest.mark.parametrize("value", ["", "0", "false", "no", "off", "maybe"])
+def test_anything_but_the_opt_in_is_local(monkeypatch, local_only, value):
+    """Unset, off, or a typo all mean the same thing, because the default is safe."""
+    _stub_postgres(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user@host/db")
+    monkeypatch.setenv(REMOTE_ENV_VAR, value)
+
+    repository = repository_from_env()
+
+    assert isinstance(repository, SqliteLeaderboardRepository)
+    repository.close()
+
+
+def test_an_explicit_url_is_taken_at_its_word(monkeypatch, local_only):
+    """The guard is about what the environment hands you, not what code asks for."""
+    constructed = _stub_postgres(monkeypatch)
+
+    repository = repository_from_env("postgresql://user@host/db")
+
+    assert repository is constructed[0]
+
+
+def test_a_local_url_needs_no_opt_in(local_only):
+    repository = repository_from_env("sqlite:///:memory:")
+    assert isinstance(repository, SqliteLeaderboardRepository)
+    repository.close()
 
 
 def test_an_entry_serialises_to_what_the_browser_expects(store):

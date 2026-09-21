@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import sys
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -51,6 +52,25 @@ MAX_SCORE = 1_000_000
 MIN_RECORDED_SCORE = 1
 
 DEFAULT_DATABASE_URL = "sqlite:///./leaderboard.db"
+
+#: Opting in to the shared, deployed board. A PostgreSQL `DATABASE_URL` is not
+#: enough on its own: `.env` holds the deployed URL whether or not today's run
+#: is meant to reach it, which used to mean every practice run at a local
+#: checkout wrote its score into the table real players are ranked in - and,
+#: worse, spent a real name, since a nickname in the visible top ten is
+#: reserved from everybody. The URL says *where* the shared board is; this says
+#: you meant to play on it.
+REMOTE_ENV_VAR = "LEADERBOARD_REMOTE"
+
+#: Everything else - unset, empty, "0", "false", a typo - is local. The default
+#: has to be the safe one: a forgotten variable must cost a deployment its
+#: durability, which is loud, rather than cost a player their place, which is
+#: silent and cannot be undone.
+_REMOTE_OPT_IN = frozenset({"1", "true", "yes", "on"})
+
+
+def _remote_is_intended() -> bool:
+    return os.environ.get(REMOTE_ENV_VAR, "").strip().lower() in _REMOTE_OPT_IN
 
 
 @dataclass(frozen=True)
@@ -407,20 +427,46 @@ class PostgresLeaderboardRepository:
 
 
 def repository_from_env(url: str | None = None) -> LeaderboardRepository:
-    """Build the store the environment asks for.
+    """Build the store this process is *meant* to use.
 
-    `DATABASE_URL` is the whole configuration surface, so deployment is one
-    variable rather than a code change:
+    Two variables, and they answer different questions. `DATABASE_URL` says
+    where the leaderboard is:
 
         sqlite:///./leaderboard.db      a file, the default
         sqlite:///:memory:             nothing survives the process
-        postgresql://user@host/db      PostgreSQL production database
+        postgresql://user@host/db      the shared, deployed board
 
-    PostgreSQL URLs select the deployed store. Unknown schemes fail explicitly
-    instead of silently falling back to a local SQLite file, because a deployed
-    server writing to its container disk only looks durable until it restarts.
+    `LEADERBOARD_REMOTE` says whether this process meant to play on a shared
+    one. A PostgreSQL URL is honoured only with the opt-in; without it the URL
+    is ignored, the local file is used, and the swap announces itself on
+    startup rather than being something you notice later in the table.
+
+    They are separate because the deployed URL sits in `.env` permanently, so
+    "which database" and "am I playing for real" stopped being the same
+    question the moment a local checkout could reach production. **A deployment
+    must set `LEADERBOARD_REMOTE=1`** or it will write to its own container
+    disk, which only looks durable until it restarts.
+
+    The guard reads the *environment*. A URL passed in as an argument is a
+    caller saying exactly what it wants - a test, a script, a one-off import -
+    and is taken at its word.
+
+    Unknown schemes are refused outright, for the same reason the fallback
+    above is noisy: a store that quietly becomes a different store is worse
+    than one that will not open.
     """
-    url = url or os.environ.get("DATABASE_URL") or DEFAULT_DATABASE_URL
+    if not url:
+        url = os.environ.get("DATABASE_URL") or DEFAULT_DATABASE_URL
+        if url.startswith(("postgres://", "postgresql://")) and not _remote_is_intended():
+            # stderr, where uvicorn's own log goes: stdout is block-buffered
+            # into a pipe, so this would sit unflushed behind the startup lines
+            # it is meant to appear among.
+            print(
+                f"{REMOTE_ENV_VAR} is off: ignoring the remote DATABASE_URL "
+                f"and playing against {DEFAULT_DATABASE_URL}",
+                file=sys.stderr,
+            )
+            url = DEFAULT_DATABASE_URL
 
     if url.startswith("sqlite://"):
         path = url[len("sqlite://") :]

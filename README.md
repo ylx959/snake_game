@@ -67,25 +67,44 @@ NEXT_PUBLIC_WS_URL=ws://127.0.0.1:8000/ws
 
 Without it the client falls back to the same address.
 
-**Back end.** One variable, `DATABASE_URL`, read from the environment.
-`./dev.sh` passes `backend/.env` to uvicorn's `--env-file` when that file
-exists, so a local value goes there; it is gitignored. `.venv/bin/python
-main.py` reads only a real environment variable.
+**Back end.** Two variables, read from the environment, copied from
+`backend/.env.example`. `./dev.sh` passes `backend/.env` to uvicorn's
+`--env-file` when that file exists, so local values go there; it is gitignored.
+`.venv/bin/python main.py` reads only real environment variables.
+
+`DATABASE_URL` says where the leaderboard is:
 
 ```text
 sqlite:///./leaderboard.db    a local file — the default, created on first run
 sqlite:///:memory:            nothing survives the process
-postgresql://user@host/db     a deployed PostgreSQL database
+postgresql://user@host/db     the shared, deployed board
+```
+
+`LEADERBOARD_REMOTE` says whether this process meant to play on a shared one.
+A PostgreSQL URL is honoured only when it is `1`; without it the URL is ignored,
+the local file is used, and the swap says so on startup.
+
+```bash
+./dev.sh                          # local board, whatever DATABASE_URL says
+LEADERBOARD_REMOTE=1 ./dev.sh     # the real one
 ```
 
 - Rooms are not configured because rooms are not stored: they live in memory and
   are worth nothing once everyone leaves.
 - The leaderboard is the only durable state, behind a `LeaderboardRepository`
   Protocol (`backend/leaderboard/repository.py`); `repository_from_env()`
-  selects SQLite or PostgreSQL from the URL scheme.
-- SQLite remains the zero-setup local default. Deployments set `DATABASE_URL`
-  to a secret PostgreSQL connection string; unsupported schemes fail at startup
-  instead of silently writing to an ephemeral container file.
+  selects SQLite or PostgreSQL from the URL scheme, after the opt-in decides
+  whether a remote scheme is honoured at all.
+- The two are separate because the deployed URL sits in `.env` permanently, so
+  “which database” and “am I playing for real” stopped being the same question
+  the moment a local checkout could reach production. A practice run should not
+  push a real player down the table — nor spend a real nickname, since a name
+  in the visible top ten is reserved from everybody.
+- **A deployment must set `LEADERBOARD_REMOTE=1`**, or it writes to its own
+  container disk, which only looks durable until it restarts. The default is the
+  safe one on purpose: a forgotten variable costs a deployment its durability,
+  which is loud, rather than a player their place, which is silent.
+- Unsupported schemes still fail at startup rather than falling back quietly.
 
 ## Playing
 
